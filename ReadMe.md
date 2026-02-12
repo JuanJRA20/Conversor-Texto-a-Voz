@@ -7,6 +7,12 @@
 [![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)]()
+[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)]()
+![GitHub repo size](https://img.shields.io/github/repo-size/JuanJRA20/Conversor-Texto-a-Voz?style=for-the-badge)
+![GitHub last commit](https://img.shields.io/github/last-commit/JuanJRA20/Conversor-Texto-a-Voz?style=for-the-badge)
+![GitHub stars](https://img.shields.io/github/stars/JuanJRA20/Conversor-Texto-a-Voz?style=for-the-badge)
 
 </div>
 
