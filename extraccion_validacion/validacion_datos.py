@@ -8,7 +8,8 @@ import re          # Manejo de expresiones regulares
 import validators  # Validación de URLs
 import magic       # Detección de tipos MIME de archivos
 from abc import ABC, abstractmethod # Clases abstractas para definir interfaces
-from typing import Optional, List, Tuple # Tipos para anotaciones
+from typing import Optional, Dict # Tipos para anotaciones
+MIMES_SOPORTADOS : Dict[str, str] = {'.txt': 'text/plain',  '.json': 'application/json', '.pdf': 'application/pdf'}
 
 # Segunda clase: Validacion de datos
 class IValidador(ABC):
