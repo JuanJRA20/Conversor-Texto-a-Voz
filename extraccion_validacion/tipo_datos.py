@@ -2,71 +2,188 @@
 
 # Librerías estándar de Python
 import os          # Manejo de archivos y directorios
-
+from abc import ABC, abstractmethod # Clases abstractas para definir interfaces
+from typing import Optional, List, Tuple # Tipos para anotaciones
 # Librerías externas (instaladas con pip)
 import validators  # Validación de URLs
 
-# Importación del logger personalizado para el sistema
-from Logger import Telemetriaindustrial
-
-# Inicializacion del logger
-logger = Telemetriaindustrial(nombre="ExtraccionDatosLogger").logger
+prefijos_default = ['http', 'https', 'ftp'] # Prefijos de URL predeterminados
 
 #Primera clase: tipo de entrada a la funcion
-class prefijo:
+def construir_prefijos(esquemas: Optional[List[str]] = None) -> Tuple[str, ...]:
+    """
+    Construye tupla de prefijos de esquema para URLs.
+    Args:
+        esquemas: Lista de esquemas (ej: ['http', 'https', 'ftp'])
+    Returns:
+        Tupla de prefijos construidos    
+"""
+    if not esquemas:
+        return prefijos_default
+    
+    # Validar que todos sean strings no vacíos
+    if not all(isinstance(e, str) and e for e in esquemas):
+        return prefijos_default
+    
+    return tuple(f"{esquema}://" for esquema in esquemas)
 
-    #variable de clase con los prefijos comunes
-    Prefijos = tuple(f"{prefijo}://" for prefijo in ['http', 'https'])
-
-    # Metodo estatico para construir prefijos
-    @staticmethod
-    def construir_prefijos(esquemas_permitidos=None):
-
-        # Si no se proporcionan esquemas, usar los predeterminados
-        if not esquemas_permitidos:  
-            return prefijo.Prefijos # Retornar los prefijos predeterminados
-
-        # En caso de tener esquemas permitidos, validar que todos sean cadenas no vacías
-        if all(isinstance(esquema, str) and esquema for esquema in esquemas_permitidos):
-            return tuple(f"{esquema}://" for esquema in esquemas_permitidos) # Retornar los prefijos construidos
-
-        # Si hay esquemas no válidos, registrar un error y usar los predeterminados
-        logger.error(f"Esquemas permitidos no válidos: {esquemas_permitidos}. Usando prefijos predeterminados.")
-        return prefijo.Prefijos # Retornar los prefijos predeterminados
-
-prefijos_construidos = prefijo.construir_prefijos() # Construir los prefijos al cargar el módulo para su uso posterior
-
-class tipoentrada:
-    # Metodo estatico para determinar el tipo de entrada
-    @staticmethod
-    def determinar_tipo(entrada, esquemas_permitidos=None):
-
-        # Caso 1: Es un archivo existente
-        if os.path.isfile(entrada):
-            return "Archivo", entrada # Retornar tipo "Archivo" y la ruta del archivo
-        
-        # Caso 2: Es una URL
-        if validators.url(entrada):
-
-            #registro en logger
-            logger.info(f"Tipo de entrada: '{entrada}' URL valida detectada")
-
-            #Creacion de prefijos permitidos
+class NormalizadorURL:
+    """Normaliza URLs agregando esquema si falta."""
+    
+    def __init__(self, prefijos: Tuple[str, ...] = prefijos_default):
+        self.prefijos = prefijos
+    
+    def normalizar(self, url: str) -> str:
+        """
+        Agrega esquema a URL si no lo tiene.
+        Args:
+            url: URL a normalizar
             
-            prefijos = prefijos_construidos
+        Returns:
+            URL con esquema
+        """
+        if not url.startswith(self.prefijos):
+            return f'http://{url}'
+        return url
+    
+class IDetectorTipo(ABC):
+    """Interfaz para detectores de tipo de entrada."""
+    
+    @abstractmethod
+    def detectar(self, entrada: str) -> bool:
+        """Verifica si la entrada es de este tipo."""
+        pass
+    
+    @abstractmethod
+    def obtener_tipo(self) -> str:
+        """Retorna el nombre del tipo."""
+        pass
 
-            # Verificar y corregir si falta algún esquema
-            if not entrada.startswith(prefijos):
-                logger.info(f"URL sin esquema detectada, añadiendo esquema predeterminado 'http://': {entrada}")
-                entrada = 'http://' + entrada  # Añadir esquema predeterminado
 
-            return "URL", entrada # Retornar tipo "URL" y la URL corregida
+class DetectorArchivo(IDetectorTipo):
+    """Detecta si la entrada es un archivo existente."""
+    
+    def detectar(self, entrada: str) -> bool:
+        return os.path.isfile(entrada)
+    
+    def obtener_tipo(self) -> str:
+        return "Archivo"
+
+
+class DetectorURL(IDetectorTipo):
+    """Detecta si la entrada es una URL válida."""
+    
+    def __init__(self, normalizador: Optional[NormalizadorURL] = None):
+        self.normalizador = normalizador or NormalizadorURL()
+    
+    def detectar(self, entrada: str) -> bool:
+        return validators.url(entrada) is True
+    
+    def obtener_tipo(self) -> str:
+        return "URL"
+    
+    def normalizar_entrada(self, entrada: str) -> str:
+        """Normaliza la URL agregando esquema si falta."""
+        return self.normalizador.normalizar(entrada)
+
+
+class DetectorTextoPlano(IDetectorTipo):
+    """Detecta texto plano (fallback final)."""
+    
+    def detectar(self, entrada: str) -> bool:
+        return isinstance(entrada, str)
+    
+    def obtener_tipo(self) -> str:
+        return "Textoplano"
+
+class ClasificadorTipoEntrada:
+    """
+    Clasifica y normaliza diferentes tipos de entrada.
+    Usa Chain of Responsibility para determinar el tipo.
+    """
+    
+    def __init__(self, logger=None):
+        """
+        Args:
+            logger: Logger opcional para registrar eventos
+        """
+        self.logger = logger
         
-        # Caso 3: Es un texto plano
-        if isinstance(entrada, str):
-            logger.info(f"Tipo de entrada: '{entrada}' Texto plano detectado")
-            return "Textoplano", entrada # Retornar tipo "Textoplano" y el texto plano
+        # Detectores en orden de prioridad
+        self.detector_url = DetectorURL()
+        self.detectores = [DetectorArchivo(), self.detector_url, DetectorTextoPlano()]
+    
+    def determinar_tipo(self, entrada: str) -> Tuple[Optional[str], str]:
+        """
+        Determina el tipo de entrada y la normaliza si es necesario.
         
-        else:
-            logger.warning(f"Tipo de entrada desconocido: '{entrada}'. No es Archivo, URL válida ni Texto Plano.")
-            return None, entrada # Retornar None si no coincide con ningun tipo conocido
+        Args:
+            entrada: Texto, archivo o URL a clasificar
+            
+        Returns:
+            Tupla (tipo, entrada_normalizada)
+            donde tipo puede ser: "Archivo", "URL", "Textoplano", None
+        """
+        for detector in self.detectores:
+            if detector.detectar(entrada):
+                tipo = detector.obtener_tipo()
+                
+                # Normalizar si es URL
+                if isinstance(detector, DetectorURL):
+                    entrada = detector.normalizar_entrada(entrada)
+                    if self.logger:
+                        self.logger.info(f"URL detectada y normalizada: {entrada}")
+                
+                if self.logger:
+                    self.logger.info(f"Tipo de entrada detectado: {tipo}")
+                
+                return tipo, entrada
+        
+        # No se pudo determinar
+        if self.logger:
+            self.logger.warning(f"Tipo de entrada desconocido: {entrada}")
+        
+        return None, entrada
+    
+    def es_archivo(self, entrada: str) -> bool:
+        """Verifica rápidamente si es archivo."""
+        return self.detectores[0].detectar(entrada)
+    
+    def es_url(self, entrada: str) -> bool:
+        """Verifica rápidamente si es URL."""
+        return self.detectores[1].detectar(entrada)
+    
+    def es_texto_plano(self, entrada: str) -> bool:
+        """Verifica rápidamente si es texto plano."""
+        tipo, _ = self.determinar_tipo(entrada)
+        return tipo == "Textoplano"
+    
+class ClasificadorFactory:
+    """Factory para crear clasificadores con diferentes configuraciones."""
+    
+    @staticmethod
+    def crear_con_logger(logger) -> ClasificadorTipoEntrada:
+        """Crea clasificador con logger inyectado."""
+        return ClasificadorTipoEntrada(logger=logger)
+    
+    @staticmethod
+    def crear_con_esquemas_personalizados(
+        esquemas: List[str],
+        logger=None
+    ) -> ClasificadorTipoEntrada:
+        """
+        Crea clasificador con esquemas de URL personalizados.
+        
+        Args:
+            esquemas: Lista de esquemas permitidos (ej: ['http', 'https', 'ftp'])
+            logger: Logger opcional
+        """
+        prefijos = construir_prefijos(esquemas)
+        normalizador = NormalizadorURL(prefijos)
+        
+        clasificador = ClasificadorTipoEntrada(logger=logger)
+        clasificador.detector_url = DetectorURL(normalizador)
+        clasificador.detectores[1] = clasificador.detector_url
+        
+        return clasificador
+ 
