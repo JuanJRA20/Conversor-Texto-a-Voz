@@ -7,7 +7,7 @@ from typing import Optional, List, Tuple # Tipos para anotaciones
 # Librerías externas (instaladas con pip)
 import validators  # Validación de URLs
 
-prefijos_default = ['http', 'https', 'ftp'] # Prefijos de URL predeterminados
+PREFIJOS_DEFAULT = ('http', 'https', 'ftp') # Prefijos de URL predeterminados
 
 #Primera clase: tipo de entrada a la funcion
 def construir_prefijos(esquemas: Optional[List[str]] = None) -> Tuple[str, ...]:
@@ -19,32 +19,13 @@ def construir_prefijos(esquemas: Optional[List[str]] = None) -> Tuple[str, ...]:
         Tupla de prefijos construidos    
 """
     if not esquemas:
-        return prefijos_default
+        return PREFIJOS_DEFAULT
     
     # Validar que todos sean strings no vacíos
     if not all(isinstance(e, str) and e for e in esquemas):
-        return prefijos_default
+        return PREFIJOS_DEFAULT
     
     return tuple(f"{esquema}://" for esquema in esquemas)
-
-class NormalizadorURL:
-    """Normaliza URLs agregando esquema si falta."""
-    
-    def __init__(self, prefijos: Tuple[str, ...] = prefijos_default):
-        self.prefijos = prefijos
-    
-    def normalizar(self, url: str) -> str:
-        """
-        Agrega esquema a URL si no lo tiene.
-        Args:
-            url: URL a normalizar
-            
-        Returns:
-            URL con esquema
-        """
-        if not url.startswith(self.prefijos):
-            return f'http://{url}'
-        return url
     
 class IDetectorTipo(ABC):
     """Interfaz para detectores de tipo de entrada."""
@@ -73,8 +54,8 @@ class DetectorArchivo(IDetectorTipo):
 class DetectorURL(IDetectorTipo):
     """Detecta si la entrada es una URL válida."""
     
-    def __init__(self, normalizador: Optional[NormalizadorURL] = None):
-        self.normalizador = normalizador or NormalizadorURL()
+    def __init__(self, prefijos: Optional[Tuple[str, ...]] = PREFIJOS_DEFAULT):
+        self.prefijos = construir_prefijos(prefijos)
     
     def detectar(self, entrada: str) -> bool:
         return validators.url(entrada) is True
@@ -84,8 +65,9 @@ class DetectorURL(IDetectorTipo):
     
     def normalizar_entrada(self, entrada: str) -> str:
         """Normaliza la URL agregando esquema si falta."""
-        return self.normalizador.normalizar(entrada)
-
+        if not entrada.startswith(self.prefijos):
+            return f'http://{entrada}'
+        return entrada
 
 class DetectorTextoPlano(IDetectorTipo):
     """Detecta texto plano (fallback final)."""
@@ -102,16 +84,20 @@ class ClasificadorTipoEntrada:
     Usa Chain of Responsibility para determinar el tipo.
     """
     
-    def __init__(self, logger=None):
+    def __init__(self, prefijos: Optional[Tuple[str, ...]] = PREFIJOS_DEFAULT, logger=None):
         """
         Args:
+            prefijos: Tupla de prefijos de esquema para URLs
             logger: Logger opcional para registrar eventos
         """
         self.logger = logger
         
+        self.detector_archivo = DetectorArchivo()
+        self.detector_url = DetectorURL(prefijos=prefijos)
+        self.detector_texto = DetectorTextoPlano()
+        
         # Detectores en orden de prioridad
-        self.detector_url = DetectorURL()
-        self.detectores = [DetectorArchivo(), self.detector_url, DetectorTextoPlano()]
+        self.detectores = [self.detector_archivo, self.detector_url, self.detector_texto]
     
     def determinar_tipo(self, entrada: str) -> Tuple[Optional[str], str]:
         """
@@ -147,14 +133,14 @@ class ClasificadorTipoEntrada:
     
     def es_archivo(self, entrada: str) -> bool:
         """Verifica rápidamente si es archivo."""
-        return self.detectores[0].detectar(entrada)
+        return self.detector_archivo.detectar(entrada)
     
     def es_url(self, entrada: str) -> bool:
         """Verifica rápidamente si es URL."""
-        return self.detectores[1].detectar(entrada)
+        return self.detector_url.detectar(entrada)
     
     def es_texto_plano(self, entrada: str) -> bool:
         """Verifica rápidamente si es texto plano."""
-        tipo, _ = self.determinar_tipo(entrada)
-        return tipo == "Textoplano"
+        return not self.es_archivo(entrada) and not self.es_url(entrada)
+    
  
