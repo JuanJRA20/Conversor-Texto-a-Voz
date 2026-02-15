@@ -9,7 +9,8 @@ import validators  # Validación de URLs
 import magic       # Detección de tipos MIME de archivos
 from abc import ABC, abstractmethod # Clases abstractas para definir interfaces
 from typing import Optional, Dict # Tipos para anotaciones
-MIMES_SOPORTADOS : Dict[str, str] = {'.txt': 'text/plain',  '.json': 'application/json', '.pdf': 'application/pdf'}
+MIMES_SOPORTADOS: Dict[str, str] = {'.txt': 'text/plain', '.json': 'application/json',
+                                     '.pdf': 'application/pdf'}
 
 # Segunda clase: Validacion de datos
 class IValidador(ABC):
@@ -160,6 +161,10 @@ class GestorValidadores:
             entrada: Ruta del archivo
             mime_esperado: Tipo MIME esperado (opcional)
         """
+        # Si no se especifica MIME, buscar por extensión
+        if mime_esperado is None:
+            mime_esperado = self._obtener_mime_por_extension(entrada)
+
         validador = ValidarArchivo(mime_esperado=mime_esperado, logger=self.logger)
         return validador.validar(entrada)
     
@@ -185,3 +190,21 @@ class GestorValidadores:
             return self.validar_texto(entrada)
         else:
             raise ValueError(f"Tipo de validación no reconocido: {tipo}")
+    
+    def _obtener_mime_por_extension(self, ruta: str) -> Optional[str]:
+        """
+        Obtiene el MIME esperado según la extensión del archivo.
+        
+        Args:
+            ruta: Ruta del archivo
+            
+        Returns:
+            MIME tipo esperado o None si la extensión no está soportada
+        """
+        _, extension = os.path.splitext(ruta)
+        mime = MIMES_SOPORTADOS.get(extension.lower())
+        
+        if mime is None and self.logger:
+            self.logger.warning(f"Extensión no soportada: {extension}")
+        
+        return mime
