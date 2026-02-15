@@ -4,211 +4,350 @@
 import os          # Manejo de archivos y directorios
 import json        # Manejo de archivos JSON
 
+from typing import Optional, Callable
+from abc import ABC, abstractmethod
 # Librerías externas (instaladas con pip)
 import PyPDF2 as pdf  # Manipulación de archivos PDF
 import requests    # Realizar solicitudes HTTP
 import lxml.html as html  # Parseo eficiente de HTML
 from bs4 import BeautifulSoup as bs  # Parseo personalizable de HTML
 from newspaper import Article  # Extracción de noticias y artículos
+import validators  # Validación de URLs
 
-# Importación del logger personalizado para el sistema
-from Logger import Telemetriaindustrial
+time_request_limit = 10
 
-# Inicializacion del logger
-logger = Telemetriaindustrial(nombre="ExtraccionDatosLogger").logger
+class IExtraccion(ABC):
+    @abstractmethod
+    def extraer(self, entrada) -> Optional[str]:
+        pass
+    @abstractmethod
+    def puede_extraer(self, entrada) -> bool:
+        pass
 
-# Tercera clase: Extraccion de datos
-class ExtraccionDatos:
+class ManejadorArchivos:
+    """
+    Manejador genérico para apertura/cierre de archivos.
+    Elimina duplicación de código usando Template Method Pattern.
+    """ 
+    def __init__(self, logger=None):
+        """
+        Args: logger: Logger opcional para registrar eventos
+        """
+        self.logger = logger
+    
+    def procesar_archivo(self, ruta: str, procesador: Callable, tipo_archivo: str, modo: str = 'r',
+                          encoding: Optional[str] = 'utf-8') -> Optional[str]:
+        """
+        Template method para procesamiento genérico de archivos.
+        Maneja apertura, procesamiento, cierre y errores de forma uniforme.
+        
+        Args:
+            ruta: Ruta del archivo a procesar
+            procesador: Función que recibe el archivo abierto y retorna el texto
+            tipo_archivo: Descripción del tipo para logging (ej: "TXT", "PDF")
+            modo: Modo de apertura del archivo ('r' para texto, 'rb' para binario)
+            encoding: Codificación del archivo (None para modo binario)
+            
+        Returns: Texto extraído o None si ocurre algún error
+        """
+        try:
+            # Determinar encoding según modo
+            codificado = encoding if modo != 'rb' else None
+            
+            # Abrir archivo con context manager (cierre automático)
+            with open(ruta, mode=modo, encoding=codificado) as archivo:
+                texto = procesador(archivo)
+                
+                if self.logger:
+                    self.logger.info(f"Extracción {tipo_archivo}: Exitosa - {ruta}")
+                
+                return texto
+        
+        except FileNotFoundError:
+            if self.logger:
+                self.logger.error(f"Extracción {tipo_archivo}: Archivo no encontrado - {ruta}")
+            return None
+        
+        except PermissionError:
+            if self.logger:
+                self.logger.error(f"Extracción {tipo_archivo}: Permiso denegado - {ruta}")
+            return None
+        
+        except UnicodeDecodeError as e:
+            if self.logger:
+                self.logger.error(
+                    f"Extracción {tipo_archivo}: Error de codificación - {ruta} - {e}"
+                )
+            return None
+        
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Extracción {tipo_archivo}: Error inesperado - {ruta} - {e}")
+            return None
 
-    # Mapeo por extensión a métodos (constante de clase)
-    FORMATO_MANEJADORES = {'.txt': '_extraer_texto_txt', '.json': '_extraer_texto_json', '.pdf': '_extraer_texto_pdf'}
+class ExtraccionTextoPlano(IExtraccion):
+    def __init__(self, logger=None):
+        self.logger = logger
 
-    # Metodo estatico para extraer datos de texto plano
-    @staticmethod
-    def textoplano(entrada):
-
+    def extraer(self, entrada):
         try: #bloque try-except para capturar errores inesperados
 
             texto = entrada.strip() # Eliminar espacios en blanco al inicio y final
-            logger.info("Extraccion de texto plano: Exitoso") 
             return texto # Retornar el texto plano extraido
         
         except Exception as e: # Capturar cualquier excepcion inesperada
-            logger.error(f"Extraccion de texto plano: Error al extraer el texto - {str(e)}")
+            if self.logger:
+                self.logger.error(f"Extraccion de texto plano: Error al extraer el texto - {str(e)}")
             return None # Retornar None en caso de error
-    
-    # Metodo estatico para extraer datos de archivos
-    @staticmethod
-    def archivo(entrada):
-
-        try: #bloque try-except para capturar errores inesperados
-
-            _, formato = os.path.splitext(entrada) # Obtener la extension del archivo
-            formato = formato.lower() # Convertir la extension a minusculas
-
-            # Verificar si el formato es soportado, verificando si se encuentra dentro del diccionario de manejadores
-            if not formato in ExtraccionDatos.FORMATO_MANEJADORES:
-                logger.error(f"Extraccion de archivo: Formato no soportado ({formato})")
-                return None # Retornar None si el formato no es soportado
-
-            # Llamada al metodo correspondiente segun el formato
-            metodo = getattr(ExtraccionDatos, ExtraccionDatos.FORMATO_MANEJADORES[formato]) # Obtener el metodo correspondiente
-            texto = metodo(entrada) # Llamar al metodo para extraer el texto
-            logger.info(f"Extraccion de archivo ({formato}): Exitoso")
-            return texto # Retornar el texto extraido
         
-        except Exception as e: # Capturar cualquier excepcion inesperada
-            logger.error(f"Extraccion de archivo: Error al extraer el archivo - {str(e)}")
-            return None # Retornar None en caso de error
+    def puede_extraer(self, entrada):
+        return isinstance(entrada, str) and bool(entrada.strip()) # Verificar que la entrada sea una cadena no vacía
     
-    # Metodo estatico para extraer datos de URLs
-    @staticmethod
-    def url(entrada, parser='lxml'):
+class ExtraccionTXT(IExtraccion):
+    def __init__(self, logger=None):
+        self.logger = logger
+        self.manejador = ManejadorArchivos(logger)
 
-        #bloque try-except para capturar errores inesperados
-        try: 
-            try:
+    def extraer(self, entrada):
+        return self.manejador.procesar_archivo(ruta=entrada, procesador=lambda x: x.read(),
+                                               tipo_archivo="TXT")
+    
+    
+    def puede_extraer(self, entrada):
+        return os.path.isfile(entrada) and entrada.lower().endswith('.txt') # Verificar que la entrada sea un archivo con extension .txt
+    
+class ExtraccionJSON(IExtraccion):
+    def __init__(self, logger=None):
+        self.logger = logger
+        self.manejador = ManejadorArchivos(logger)
 
-                articulo = Article(entrada) # Crear un objeto Article de newspaper3k
-                articulo.download() # Descargar el contenido del articulo
-                articulo.parse() # Parsear el contenido del articulo
+    def extraer(self, entrada):
 
-                #verificar si el texto extraido no esta vacio
-                if articulo.text: 
-                    texto = articulo.text # si el texto no esta vacio, obtener el texto del articulo
-                    logger.info("Extraccion de URL: Exitoso")
-                    return texto.strip() # Retornar el texto extraido, eliminando espacios en blanco al inicio y final
-                
-            except Exception as e: # Capturar cualquier excepcion inesperada en newspaper3k
-                logger.warning(f"Extraccion de URL (newspaper): Fallo -{str(e)}")  
-
-            # Metodo alternativo usando requests y lxml o BeautifulSoup
-            respuesta = requests.get(entrada, timeout=10) # Realizar una solicitud GET a la URL con un tiempo de espera de 10 segundos
-
-            # Verificar el codigo de estado HTTP
-            if respuesta.status_code != 200: # Si el codigo de estado no es 200, registrar una advertencia
-                logger.warning(f"Extracción de URL: Código de estado HTTP no válido: {respuesta.status_code}.")
-                return None # Retornar None si el codigo de estado no es valido
-            
-            # Parsear el contenido HTML usando lxml o BeautifulSoup segun el parser especificado
-            if parser == 'lxml': # Si el parser es lxml, o no es especificado
-
-                arbol = html.fromstring(respuesta.content) # Parsear el contenido HTML con lxml
-                encabezado = arbol.xpath('//h1/text() | //h2/text() | //h3/text()') # Extraer encabezados (h1, h2, h3)
-                parrafos = arbol.xpath('//p/text()') # Extraer párrafos relevantes
-                texto_encabezados = ' '.join(encabezado) # Unir los encabezados en una sola cadena
-                texto_parrafos = ' '.join(parrafos) # Unir los párrafos en una sola cadena
-                texto = (texto_encabezados + " " + texto_parrafos).strip() # Combinar encabezados y párrafos, eliminando espacios en blanco al inicio y final
-
-                # Verificar si se encontro texto en los parrafos
-                if not texto.strip():
-                    logger.warning("Extraccion de URL: No se encontro texto en los parrafos.")
-                    return None # Retornar None si no se encontro texto
-                
-                #Si todo es exitoso, retornar el texto extraido
-                logger.info("Extraccion de URL (metodo alternativo): Exitoso")
-                return texto
-
-            # si se ingresa otro parser, usar BeautifulSoup
+        def procesar_json(archivo):
+            data = json.load(archivo)
+            if isinstance(data, dict):
+                return " ".join(str(value) for value in data.values()) # Unir los valores del diccionario en una sola cadena
+            elif isinstance(data, list):
+                return " ".join(str(item) for item in data) # Unir los elementos de la lista en una sola cadena
             else:
-                # Parsear el contenido HTML con BeautifulSoup
-                soup = bs(respuesta.content, 'html.parser')
+                raise ValueError(f"El archivo JSON {entrada} no tiene un formato válido.") # Lanzar una excepcion si el formato no es valido
 
-            # Extraer encabezados (h1, h2, h3) y párrafos relevantes
-            texto_encabezados = ' '.join(h.get_text() for h in soup.find_all(['h1', 'h2', 'h3']))
-            texto_parrafos = ' '.join(p.get_text() for p in soup.find_all('p'))
+        return self.manejador.procesar_archivo(ruta=entrada, procesador=procesar_json, tipo_archivo="JSON")
 
-            # Combinar encabezados y párrafos, eliminando espacios en blanco al inicio y final
-            texto = (texto_encabezados + " " + texto_parrafos).strip()
+    def puede_extraer(self, entrada):
+        return os.path.isfile(entrada) and entrada.lower().endswith('.json') # Verificar que la entrada sea un archivo con extension .json
+    
+class ExtraccionPDF(IExtraccion):
+    def __init__(self, logger=None):
+        self.logger = logger
+        self.manejador = ManejadorArchivos(logger)
+    def extraer(self, entrada):
+        def procesar_pdf(archivo):
+            texto = ""
+            lector_pdf = pdf.PdfReader(archivo)
+            for pagina in lector_pdf.pages:
+                texto += pagina.extract_text()
 
-            # Verificar si se encontro texto en los parrafos
-            if not texto:
-                logger.warning("Extraccion de URL: No se encontro texto en los parrafos.")
-                return None # Retornar None si no se encontro texto
-            
-            #Si todo es exitoso, retornar el texto extraido
-            logger.info("Extraccion de URL (metodo alternativo): Exitoso")
+            if self.logger:
+                self.logger.info("Extraccion de archivo PDF: Exitoso")
             return texto
         
-        # Capturar excepciones específicas de requests por tiempo de espera agotado
-        except requests.exceptions.Timeout:
-            logger.warning("Extracción de URL: Tiempo de espera agotado al intentar acceder a la URL.")
-            return None # Retornar None en caso de timeout
         
-        # Capturar cualquier otra excepcion inesperada de requests
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Extracción de URL: Error al realizar la solicitud - {str(e)}")
-            return None # Retornar None en caso de error
+        return self.manejador.procesar_archivo(ruta=entrada, procesador=procesar_pdf, tipo_archivo="PDF", modo='rb')
     
-class gestionador_extracciones():
+    def puede_extraer(self, entrada):
+        return os.path.isfile(entrada) and entrada.lower().endswith('.pdf') # Verificar que la entrada sea un archivo con extension .pdf
+    
+class EstrategiaExtraccionURL(ABC):
+    @abstractmethod
+    def extraer(self, entrada) -> Optional[str]:
+        pass
 
-    @staticmethod
-    def extraccion(entrada, metodo, tipo, modo='r', encoding='utf-8'):
+class ExtraccionURLNewspaper(EstrategiaExtraccionURL):
+    def __init__(self, logger=None):
+        self.logger = logger
 
-        try: #bloque try-except para capturar errores inesperados
+    def extraer(self, entrada):
+        try:
+            articulo = Article(entrada)
+            articulo.download()
+            articulo.parse()
 
-            # Abrir el archivo en modo lectura con encoding especificado por el extractor
-            with open(entrada, mode=modo, encoding=None if modo=='rb' else encoding) as archivo:
-                texto = metodo(archivo)  # Ejecutar el extractor específico
-                logger.info(f"Extracción de archivo {tipo}: Exitosa.")
-                return texto # Retornar el texto extraido
+            if articulo.text:
+                if self.logger:
+                    self.logger.info("Extraccion de URL (newspaper): Exitoso")
+                return articulo.text.strip()
+        
+        except Exception as e:
+            if self.logger:
+                self.logger.warning(f"Extraccion de URL (newspaper): Fallo -{str(e)}")
+        return None
+    
+class ExtraccionURLRequests(EstrategiaExtraccionURL):
+    def __init__(self, logger=None, parser='lxml'):
+        self.logger = logger
+        self.parser = parser
+
+    def extraer(self, entrada):
+        try:
+            respuesta = requests.get(entrada, timeout=time_request_limit)
+
+            if respuesta.status_code != 200:
+                if self.logger:
+                    self.logger.warning(f"Extracción de URL: Código de estado HTTP no válido: {respuesta.status_code}.")
+                return None
             
-        except Exception as e: # Capturar cualquier excepcion inesperada
-            logger.error(f"Extracción de archivo {tipo}: Error - {str(e)}")
-            return None # Retornar None en caso de error
+            if self.parser == 'lxml':
+                texto = self._extraer_lxml(respuesta)
+
+            
+            else:
+                texto = self._extraer_bs(respuesta)
+
+            if texto:
+                if self.logger:
+                    self.logger.info(f"Extracción de URL ({self.parser}): Exitosa")
+                return texto
+            else:
+                if self.logger:
+                    self.logger.warning(f"Extracción URL ({self.parser}): Sin contenido - {entrada}")
         
-class tipos_extraccion:
-# Metodo estatico generico para gestionar extracciones de archivos
-
-    # Metodo estatico para extraer datos de archivos txt
-    @staticmethod
-    def _extraer_texto_txt(entrada):
-        # Llamar al gestor de extracciones con la funcion de lectura para devolver el texto extraido
-        return gestionador_extracciones.extraccion(entrada, lambda archivo: archivo.read(), "TXT")
+        except requests.exceptions.Timeout:
+            if self.logger:
+                self.logger.warning(f"Extracción URL: Timeout ({self.timeout}s) - {entrada}")
+        
+        except requests.exceptions.ConnectionError:
+            if self.logger:
+                self.logger.error(f"Extracción URL: Error de conexión - {entrada}")
+        
+        except requests.exceptions.RequestException as e:
+            if self.logger:
+                self.logger.error(f"Extracción URL: Error de requests - {e}")
+        
+        return None
+        
+    def _extraer_lxml(self, respuesta):
+        try:
+            arbol = html.fromstring(respuesta.content)
+            encabezado = arbol.xpath('//h1/text() | //h2/text() | //h3/text()')
+            parrafos = arbol.xpath('//p/text()')
+            texto_encabezados = ' '.join(encabezado)
+            texto_parrafos = ' '.join(parrafos)
+            return (texto_encabezados + " " + texto_parrafos).strip()
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Extracción de URL (lxml): Error al extraer el contenido - {str(e)}")
+            return None
     
-    # Metodo estatico para extraer datos de archivos json
-    @staticmethod
-    def _extraer_texto_json(entrada):
+    def _extraer_bs(self, respuesta):
+        try:
+            soup = bs(respuesta.content, 'html.parser')
+            texto_encabezados = ' '.join(h.get_text() for h in soup.find_all(['h1', 'h2', 'h3']))
+            texto_parrafos = ' '.join(p.get_text() for p in soup.find_all('p'))
+            texto = (texto_encabezados + " " + texto_parrafos).strip()
+            return texto if texto else None
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Extracción de URL (BeautifulSoup): Error al extraer el contenido - {str(e)}")
+            return None
+    
+class ExtraccionURL(IExtraccion):
+    def __init__(self, logger=None, timeout=time_request_limit):
+        self.logger = logger
+        self.estrategias = [ExtraccionURLNewspaper(logger), ExtraccionURLRequests(parser='lxml', timeout=timeout, logger=logger),
+            ExtraccionURLRequests(parser='beautifulsoup', timeout=timeout, logger=logger)]
+        
+    def extraer(self, entrada):
+        #bloque try-except para capturar errores inesperados
+        for estrategia in self.estrategias:
+            nombre_estrategia = estrategia.__class__.__name__
+            if self.logger:
+                self.logger.debug(f"Intentando extracción con: {nombre_estrategia}")
+            texto = estrategia.extraer(entrada)
+            if texto:
+                return texto
+        
+        # Todas las estrategias fallaron
+        if self.logger:
+            self.logger.warning(f"Extracción URL: Todas las estrategias fallaron - {entrada}")
+        
+        return None
+    
+    def puede_procesar(self, entrada: str) -> bool:
+        """Verifica si es una URL válida."""
+        return validators.url(entrada) is True
+    
 
-            # Funcion interna para procesar archivos JSON
-            def procesar_json(file):
-
-                data = json.load(file) # Cargar el contenido del archivo JSON
-
-                # Verificar si el contenido es un diccionario y extraer el texto
-                if isinstance(data, dict):
-                    return " ".join(str(value) for value in data.values()) # Unir los valores del diccionario en una sola cadena
+class GestorExtractores:
+    """
+    Gestor que coordina múltiples extractores.
+    Implementa patrón Facade para simplificar la interfaz.
+    Implementa Chain of Responsibility para selección automática.
+    
+    Características:
+    - Selección automática del extractor apropiado
+    - Orden de prioridad configurable
+    - Extensible: permite agregar nuevos extractores dinámicamente
+    - Manejo unificado de errores
+    """
+    
+    def __init__(self, logger=None, timeout_http=time_request_limit):
+        """
+        Inicializa el gestor con extractores predeterminados.
+        
+        Args:
+            logger: Logger opcional para todos los extractores
+            timeout_http: Timeout para peticiones HTTP (solo URLs)
+        """
+        self.logger = logger
+        
+        # Extractores en orden de prioridad
+        # El orden importa: se prueba de arriba a abajo hasta encontrar uno compatible
+        self.extractores = [ExtraccionURL(logger, timeout=timeout_http), ExtraccionPDF(logger), ExtraccionJSON(logger),                       
+            ExtraccionTXT(logger), ExtraccionTextoPlano(logger)]
+        
+        if self.logger:
+            self.logger.info(f"GestorExtractores inicializado con {len(self.extractores)} extractores")
+    
+    def extraer(self, entrada: str) -> Optional[str]:
+        """
+        Extrae texto usando el extractor apropiado.
+        Método principal del gestor (Facade Pattern).
+        
+        Proceso:
+        1. Itera sobre extractores en orden de prioridad
+        2. Llama a puede_procesar() para verificar compatibilidad
+        3. Usa el primer extractor compatible
+        4. Retorna texto extraído o None si todos fallan
+        
+        Args: entrada: Texto, archivo o URL a procesar
+        Returns: Texto extraído o None si falla
+        """
+        for extractor in self.extractores:
+            # Verificar si este extractor puede procesar la entrada
+            if extractor.puede_procesar(entrada):
+                nombre_extractor = extractor.__class__.__name__
                 
-                # Verificar si el contenido es una lista y extraer el texto
-                if isinstance(data, list):
-                    return " ".join(str(item) for item in data) # Unir los elementos de la lista en una sola cadena
+                if self.logger:
+                    self.logger.debug(f"Usando extractor: {nombre_extractor} para '{entrada}'")
                 
-                # Si el formato no es valido, registrar un error
+                # Intentar extracción
+                texto = extractor.extraer(entrada)
+                
+                if texto:
+                    return texto
                 else:
-                    raise ValueError(f"El archivo JSON {entrada} no tiene un formato válido.") # Lanzar una excepcion si el formato no es valido
-
-            # Llamar al gestor de extracciones con el procesador JSON para devolver el texto extraido
-            return gestionador_extracciones.extraccion(entrada, procesar_json, "JSON")
-
-    
-    # Metodo estatico para extraer datos de archivos pdf
-    @staticmethod
-    def _extraer_texto_pdf(entrada):
-
-        # Funcion interna para procesar archivos PDF
-        def procesar_pdf(archivo):
-            texto = "" # Variable para almacenar el texto extraido
-
-            # Crear un lector de PDF usando PyPDF2
-            lector_pdf = pdf.PdfReader(archivo)
-
-            # Iterar sobre todas las paginas y extraer el texto
-            for pagina in lector_pdf.pages:
-                texto += pagina.extract_text() # Extraer el texto de la pagina y agregarlo al texto total
-
-            logger.info("Extraccion de archivo PDF: Exitoso")
-            return texto # Retornar el texto extraido
+                    if self.logger:
+                        self.logger.warning(f"Extractor {nombre_extractor} compatible pero falló la extracción")
         
-        # Llamar al gestor de extracciones con el procesador PDF para devolver el texto extraido
-        return gestionador_extracciones.extraccion(entrada, procesar_pdf, "PDF", modo='rb')
-    
+        # Ningún extractor pudo procesar o todos fallaron
+        if self.logger:
+            self.logger.error(f"No se pudo extraer texto de: {entrada[:100]}... "
+                               "(ningún extractor compatible o todos fallaron)")
+        return None
+
+
+
+
+
+
