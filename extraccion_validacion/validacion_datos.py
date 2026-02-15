@@ -7,98 +7,183 @@ import re          # Manejo de expresiones regulares
 # Librerías externas (instaladas con pip)
 import validators  # Validación de URLs
 import magic       # Detección de tipos MIME de archivos
-
-# Importación del logger personalizado para el sistema
-from Logger import Telemetriaindustrial
-
-# Inicializacion del logger
-logger = Telemetriaindustrial(nombre="ValidacionDatosLogger").logger
+from abc import ABC, abstractmethod # Clases abstractas para definir interfaces
+from typing import Optional, List, Tuple # Tipos para anotaciones
 
 # Segunda clase: Validacion de datos
-class ValidadorDatos:
+class IValidador(ABC):
+    @abstractmethod
+    def validar(self, entrada) -> bool:
+        pass
 
-        # Metodos estaticos para validar diferentes tipos de datos
-        @staticmethod
-        def texto(entrada):
-
+class ValidarTextoPlano(IValidador):
+    def __init__(self, logger=None):
+        self.logger = logger
+         
+    @staticmethod
+    def validar(entrada):
             # Validar que la entrada sea una cadena
             if not isinstance(entrada, str):
-                logger.warning(f"Validación de texto: La entrada no es una cadena válida (tipo: {type(entrada)}).")
                 return False # Retornar False si no es una cadena
             
             # Validar que el texto no este vacio y sea una cadena
             if entrada.strip() == "":
-                logger.warning("Validacion de texto: El texto esta vacio") 
                 return False # Retornar False si el texto esta vacio
             
             # Si pasa todas las validaciones, retornar True
             else:
-                logger.info("Validacion de texto: Exitoso")
                 return True # Retornar True si el texto es valido
         
-        # Metodos estaticos para validar archivos y URLs
-        @staticmethod
-        def archivo(entrada, mime_esperado=None):
+class ValidarArchivo(IValidador):
+
+    def __init__(self, mime_esperado: Optional[str] = None, logger=None):
+        self.mime_esperado = mime_esperado
+        self.logger = logger
+
+   
+    def validar(self, entrada, mime_esperado=None):
 
             try: #bloque try-except para capturar errores inesperados
 
-                # Verificar si el archivo existe
-                if not os.path.isfile(entrada): #volvemos a verificar si el archivo existe por seguridad
-                    logger.warning("Validacion de archivo: El archivo no existe")
+                existe = self._validar_existencia(entrada) # Validar que el archivo exista
+                if not existe:
                     return False # Retornar False si el archivo no existe
                 
-                # Verificar si el archivo esta vacio
-                if os.path.getsize(entrada) == 0:
-                    logger.warning("Validacion de archivo: El archivo esta vacio")
+                tamano_valido = self._validar_tamano(entrada) # Validar que el archivo no este vacio
+                if not tamano_valido:
                     return False # Retornar False si el archivo esta vacio
                 
-                # Obtener el tipo MIME del archivo usando la libreria magic
-                tipo_archivo = magic.from_file(entrada, mime=True) # Obtener el tipo MIME del archivo
-                logger.info(f"Tipo MIME del archivo: {tipo_archivo}") # Registrar el tipo MIME obtenido
+                tipo_valido = self._validar_tipo_mime(entrada, mime_esperado) # Validar que el tipo MIME del archivo sea el esperado
+                if not tipo_valido:
+                    return False # Retornar False si el tipo MIME no es el esperado
                 
-                # verificar que se obtuvo un tipo MIME valido
-                if not tipo_archivo:
-                    logger.warning("Validacion de archivo: No se pudo determinar el tipo MIME del archivo")
-                    return False # Retornar False si no se pudo determinar el tipo MIME
-                
-                # Verificar si el tipo MIME coincide con el esperado en caso de tener un tipo esperado
-                if mime_esperado and tipo_archivo != mime_esperado:
-                    logger.warning(f"Validacion de archivo: Tipo MIME no coincide (esperado: {mime_esperado}, obtenido: {tipo_archivo})")
-                    return False # Retornar False si el tipo MIME no coincide
+                if self.logger:
+                    self.logger.info("Archivo validado: %s", entrada) # Registrar en el logger que el archivo ha sido validado exitosamente
 
                 # Si pasa todas las validaciones, retornar True
-                logger.info("Validacion de archivo: Exitoso")
-                return True 
+                return True
             
-            # Capturar cualquier excepcion inesperada
-            except Exception as e:
-                logger.error(f"Validacion de archivo: Error al validar el archivo - {str(e)}")
-                return False # Retornar False en caso de error
+            except (OSError, IOError) as e:
+                if self.logger:
+                    self.logger.error(f"Validación de archivo: Error de I/O - {e}")
+                return False
         
+            except Exception as e:
+                if self.logger:
+                    self.logger.error(f"Validación de archivo: Error inesperado - {e}")
+                return False
+    
+    def _validar_existencia(self, ruta: str) -> bool:
+                if not os.path.isfile(ruta):
+                     if self.logger:
+                        self.logger.warning("Archivo no encontrado: %s", ruta)
+                     return False
+                return True
+    
+    def _validar_tamano(self, ruta: str) -> bool:
+                if os.path.getsize(ruta) == 0:
+                    if self.logger:
+                        self.logger.warning("Archivo vacío: %s", ruta)
+                    return False
+                return True
+    
+    def _validar_tipo_mime(self, ruta: str, mime_esperado: Optional[str]) -> bool:
+                tipo_archivo = magic.from_file(ruta, mime=True)
+                if not tipo_archivo:
+                    if self.logger:
+                        self.logger.warning("No se pudo determinar el tipo MIME del archivo: %s", ruta)
+                    return False
+                if mime_esperado and tipo_archivo != mime_esperado:
+                    if self.logger:
+                        self.logger.warning("Tipo MIME no coincide (esperado: %s, encontrado: %s): %s", mime_esperado, tipo_archivo, ruta)
+                    return False
+                return True
+    
+class ValidarURL(IValidador):      
         # Metodos estaticos para validar URLs
-        @staticmethod
-        def url(entrada):
+        def __init__(self, logger=None):
+            self.logger = logger
+             
+        def validar(self, entrada):
 
             try: #bloque try-except para capturar errores inesperados
 
                 # Validar que la entrada sea una URL válida usando validators
-                if not validators.url(entrada):
-                    logger.warning(f"Validacion de URL: La entrada no es una URL valida ({entrada})")
-                    return False # Retornar False si no es una URL valida
-                
-                # Como ya se valido la URL en la clase TipoEntrada, aqui solo se validara el dominio
-                dominio = re.match(r'^(?:http[s]?://)?([^/]+)', entrada) # Extraer el dominio de la URL
-                dominio = dominio.group(1) if dominio else None # Obtener el dominio si se encontro
-
-                # Validar el dominio usando validators
-                if not dominio or not validators.domain(dominio):
-                    logger.warning(f"Dominio no valido ({dominio})")
-                    return False # Retornar False si el dominio no es valido
-
+                if not self._validar_formato(entrada):
+                    return False # Retornar False si el formato de la URL no es válido
+                if not self._validar_dominio(entrada):
+                    return False # Retornar False si el dominio de la URL no es válido
                 # Si pasa todas las validaciones, retornar True
-                logger.info("Validacion de URL: Exitoso")
+                if self.logger:
+                    self.logger.info("URL validada: %s", entrada) # Registrar en el logger que la URL ha sido validada exitosamente
                 return True
-            
+
             except Exception as e:
-                logger.error(f"Validacion de URL: Error al validar la URL - {str(e)}")
+                if self.logger:
+                    self.logger.error(f"Validación de URL: Error inesperado - {e}")
                 return False # Retornar False en caso de error
+            
+        def _validar_formato(self, url: str) -> bool:
+            # Validar que la URL tenga un formato correcto usando validators
+            return validators.url(url) is True
+        
+        def _validar_dominio(self, url: str) -> bool:
+            # Extraer el dominio de la URL y validarlo usando validators
+            dominio = re.match(r'^(?:http[s]?://)?([^/]+)', url)
+            dominio = dominio.group(1) if dominio else None
+            return dominio and validators.domain(dominio)
+        
+
+class GestorValidadores:
+    """
+    Gestor que coordina múltiples validadores.
+    Patrón Strategy para seleccionar el validador apropiado.
+    """
+    def __init__(self, logger=None):
+        """
+        Args:
+            logger: Logger para todos los validadores
+        """
+        self.logger = logger
+        self.validadores = {
+            "texto": ValidarTextoPlano(logger),
+            "archivo": ValidarArchivo(logger=logger),
+            "url": ValidarURL(logger)
+        }
+    
+    def validar_texto(self, entrada: str) -> bool:
+        """Valida texto plano."""
+        return self.validadores["texto"].validar(entrada)
+    
+    def validar_archivo(self, entrada: str, mime_esperado: Optional[str] = None) -> bool:
+        """
+        Valida archivo.
+        Args:
+            entrada: Ruta del archivo
+            mime_esperado: Tipo MIME esperado (opcional)
+        """
+        validador = ValidarArchivo(mime_esperado=mime_esperado, logger=self.logger)
+        return validador.validar(entrada)
+    
+    def validar_url(self, entrada: str) -> bool:
+        """Valida URL."""
+        return self.validadores["url"].validar(entrada)
+    
+    def validar_por_tipo(self, entrada: str, tipo: str) -> bool:
+        """
+        Valida según el tipo especificado.
+        Args:
+            entrada: Dato a validar
+            tipo: "texto", "archivo" o "url"  
+        Returns: True si es válido
+        """
+        tipo_lower = tipo.lower()
+        
+        if tipo_lower == "archivo":
+            return self.validar_archivo(entrada)
+        elif tipo_lower == "url":
+            return self.validar_url(entrada)
+        elif tipo_lower in ("textoplano", "texto"):
+            return self.validar_texto(entrada)
+        else:
+            raise ValueError(f"Tipo de validación no reconocido: {tipo}")

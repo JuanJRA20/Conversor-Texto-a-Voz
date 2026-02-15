@@ -140,19 +140,6 @@ class ExtraccionDatos:
             logger.error(f"Extracción de URL: Error al realizar la solicitud - {str(e)}")
             return None # Retornar None en caso de error
     
-    # Metodo estatico para gestionar la extraccion y validacion de datos segun el tipo de entrada
-    @classmethod
-    def formatos_manejadores(entrada):
-        return {'.txt': '_extraer_texto_txt', '.json': '_extraer_texto_json', 
-                        '.pdf': '_extraer_texto_pdf'}
-    
-    # Metodo estatico para verificar que los manejadores definidos en formatos_manejadores existan en la clase
-    @classmethod
-    def varificar_manejadores(entrada):
-        assert all(hasattr(ExtraccionDatos, metodo) for metodo in entrada.formatos_manejadores().values()), \
-                "Algunos métodos definidos en FORMATO_MANEJADORES no existen en la clase."
-
-
 class gestionador_extracciones():
 
     @staticmethod

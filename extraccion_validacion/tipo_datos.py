@@ -157,33 +157,4 @@ class ClasificadorTipoEntrada:
         """Verifica rápidamente si es texto plano."""
         tipo, _ = self.determinar_tipo(entrada)
         return tipo == "Textoplano"
-    
-class ClasificadorFactory:
-    """Factory para crear clasificadores con diferentes configuraciones."""
-    
-    @staticmethod
-    def crear_con_logger(logger) -> ClasificadorTipoEntrada:
-        """Crea clasificador con logger inyectado."""
-        return ClasificadorTipoEntrada(logger=logger)
-    
-    @staticmethod
-    def crear_con_esquemas_personalizados(
-        esquemas: List[str],
-        logger=None
-    ) -> ClasificadorTipoEntrada:
-        """
-        Crea clasificador con esquemas de URL personalizados.
-        
-        Args:
-            esquemas: Lista de esquemas permitidos (ej: ['http', 'https', 'ftp'])
-            logger: Logger opcional
-        """
-        prefijos = construir_prefijos(esquemas)
-        normalizador = NormalizadorURL(prefijos)
-        
-        clasificador = ClasificadorTipoEntrada(logger=logger)
-        clasificador.detector_url = DetectorURL(normalizador)
-        clasificador.detectores[1] = clasificador.detector_url
-        
-        return clasificador
  
