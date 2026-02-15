@@ -8,8 +8,10 @@ Utiliza el logger personalizado para registrar eventos importantes durante el pr
 """
 
 # Importacion de librerias necesarias:
-
-from Extraccion_datos import TipoEntrada, ExtraccionDatos, ValidadorDatos
+from extraccion_validacion.tipo_datos import tipoentrada
+from extraccion_validacion.extraccion_datos import gestionador_extracciones
+from extraccion_validacion.validacion_datos import ValidadorDatos
+from extraccion_validacion.Extraccion_datos import TipoEntrada, ExtraccionDatos, ValidadorDatos
 from Procesado_datos import ProcesadoDatos
 from Convetir_Texto_Audio import ConvertidorTextoVoz
 from Logger import Telemetriaindustrial, logger_modular
@@ -21,7 +23,7 @@ logger = Telemetriaindustrial("Main_Proceso_Texto_Voz").logger
 def extraccion_y_validacion(texto):
 
     try: #bucle try-except para manejar errores al determinar el tipo de entrada
-        tipo, valor = TipoEntrada.determinar_tipo(texto) #determina el tipo de entrada (texto plano, archivo o URL) y su valor asociado
+        tipo, valor = tipoentrada.determinar_tipo(texto) #determina el tipo de entrada (texto plano, archivo o URL) y su valor asociado
 
     except Exception as e: #maneja cualquier excepción que ocurra durante la determinación del tipo de entrada y registra el error en el logger
         logger.error("Error determinando tipo de entrada: %s", e)
