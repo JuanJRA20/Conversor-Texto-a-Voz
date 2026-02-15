@@ -190,7 +190,7 @@ class ExtraccionURLRequests(EstrategiaExtraccionURL):
         self.timeout = timeout
     def extraer(self, entrada):
         try:
-            respuesta = requests.get(entrada, self.timeout) # Realizar una solicitud GET a la URL con un timeout definido
+            respuesta = requests.get(entrada, timeout=self.timeout) # Realizar una solicitud GET a la URL con un timeout definido
 
             if respuesta.status_code != 200:
                 if self.logger:

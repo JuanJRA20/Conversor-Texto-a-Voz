@@ -20,19 +20,21 @@ class ValidarTextoPlano(IValidador):
     def __init__(self, logger=None):
         self.logger = logger
          
-    def validar(entrada):
+    def validar(self, entrada):
             # Validar que la entrada sea una cadena
-            if not isinstance(entrada, str):
-                return False # Retornar False si no es una cadena
-            
-            # Validar que el texto no este vacio y sea una cadena
-            if entrada.strip() == "":
-                return False # Retornar False si el texto esta vacio
-            
-            # Si pasa todas las validaciones, retornar True
-            else:
-                return True # Retornar True si el texto es valido
+        if not isinstance(entrada, str):
+            if self.logger:
+                self.logger.warning("Entrada no es una cadena: %s", type(entrada))
+            return False # Retornar False si no es una cadena
         
+        # Validar que el texto no este vacio y sea una cadena
+        if entrada.strip() == "":
+            return False # Retornar False si el texto esta vacio
+        
+        # Si pasa todas las validaciones, retornar True
+        else:
+            return True # Retornar True si el texto es valido
+    
 class ValidarArchivo(IValidador):
 
     def __init__(self, mime_esperado: Optional[str] = None, logger=None):
@@ -42,35 +44,35 @@ class ValidarArchivo(IValidador):
    
     def validar(self, entrada):
 
-            try: #bloque try-except para capturar errores inesperados
+        try: #bloque try-except para capturar errores inesperados
 
-                existe = self._validar_existencia(entrada) # Validar que el archivo exista
-                if not existe:
-                    return False # Retornar False si el archivo no existe
-                
-                tamano_valido = self._validar_tamano(entrada) # Validar que el archivo no este vacio
-                if not tamano_valido:
-                    return False # Retornar False si el archivo esta vacio
-                
-                tipo_valido = self._validar_tipo_mime(entrada, self.mime_esperado) # Validar que el tipo MIME del archivo sea el esperado
-                if not tipo_valido:
-                    return False # Retornar False si el tipo MIME no es el esperado
-                
-                if self.logger:
-                    self.logger.info("Archivo validado: %s", entrada) # Registrar en el logger que el archivo ha sido validado exitosamente
-
-                # Si pasa todas las validaciones, retornar True
-                return True
+            existe = self._validar_existencia(entrada) # Validar que el archivo exista
+            if not existe:
+                return False # Retornar False si el archivo no existe
             
-            except (OSError, IOError) as e:
-                if self.logger:
-                    self.logger.error(f"Validación de archivo: Error de I/O - {e}")
-                return False
+            tamano_valido = self._validar_tamano(entrada) # Validar que el archivo no este vacio
+            if not tamano_valido:
+                return False # Retornar False si el archivo esta vacio
+            
+            tipo_valido = self._validar_tipo_mime(entrada, self.mime_esperado) # Validar que el tipo MIME del archivo sea el esperado
+            if not tipo_valido:
+                return False # Retornar False si el tipo MIME no es el esperado
+            
+            if self.logger:
+                self.logger.info("Archivo validado: %s", entrada) # Registrar en el logger que el archivo ha sido validado exitosamente
+
+            # Si pasa todas las validaciones, retornar True
+            return True
         
-            except Exception as e:
-                if self.logger:
-                    self.logger.error(f"Validación de archivo: Error inesperado - {e}")
-                return False
+        except (OSError, IOError) as e:
+            if self.logger:
+                self.logger.error(f"Validación de archivo: Error de I/O - {e}")
+            return False
+    
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Validación de archivo: Error inesperado - {e}")
+            return False
     
     def _validar_existencia(self, ruta: str) -> bool:
         if not os.path.isfile(ruta):
@@ -99,39 +101,38 @@ class ValidarArchivo(IValidador):
         return True
     
 class ValidarURL(IValidador):      
-        # Metodos estaticos para validar URLs
-        def __init__(self, logger=None):
-            self.logger = logger
-             
-        def validar(self, entrada):
-
-            try: #bloque try-except para capturar errores inesperados
-
-                # Validar que la entrada sea una URL válida usando validators
-                if not self._validar_formato(entrada):
-                    return False # Retornar False si el formato de la URL no es válido
-                if not self._validar_dominio(entrada):
-                    return False # Retornar False si el dominio de la URL no es válido
-                # Si pasa todas las validaciones, retornar True
-                if self.logger:
-                    self.logger.info("URL validada: %s", entrada) # Registrar en el logger que la URL ha sido validada exitosamente
-                return True
-
-            except Exception as e:
-                if self.logger:
-                    self.logger.error(f"Validación de URL: Error inesperado - {e}")
-                return False # Retornar False en caso de error
+    # Metodos estaticos para validar URLs
+    def __init__(self, logger=None):
+        self.logger = logger
             
-        def _validar_formato(self, url: str) -> bool:
-            # Validar que la URL tenga un formato correcto usando validators
-            return validators.url(url) is True
+    def validar(self, entrada):
+
+        try: #bloque try-except para capturar errores inesperados
+
+            # Validar que la entrada sea una URL válida usando validators
+            if not self._validar_formato(entrada):
+                return False # Retornar False si el formato de la URL no es válido
+            if not self._validar_dominio(entrada):
+                return False # Retornar False si el dominio de la URL no es válido
+            # Si pasa todas las validaciones, retornar True
+            if self.logger:
+                self.logger.info("URL validada: %s", entrada) # Registrar en el logger que la URL ha sido validada exitosamente
+            return True
+
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Validación de URL: Error inesperado - {e}")
+            return False # Retornar False en caso de error
         
-        def _validar_dominio(self, url: str) -> bool:
-            # Extraer el dominio de la URL y validarlo usando validators
-            dominio = re.match(r'^(?:http[s]?://)?([^/]+)', url)
-            dominio = dominio.group(1) if dominio else None
-            return dominio and validators.domain(dominio)
-        
+    def _validar_formato(self, url: str) -> bool:
+        # Validar que la URL tenga un formato correcto usando validators
+        return validators.url(url) is True
+    
+    def _validar_dominio(self, url: str) -> bool:
+        # Extraer el dominio de la URL y validarlo usando validators
+        dominio = re.match(r'^(?:http[s]?://)?([^/]+)', url)
+        dominio = dominio.group(1) if dominio else None
+        return dominio and validators.domain(dominio)
 
 class GestorValidadores:
     """
@@ -144,11 +145,8 @@ class GestorValidadores:
             logger: Logger para todos los validadores
         """
         self.logger = logger
-        self.validadores = {
-            "texto": ValidarTextoPlano(logger),
-            "archivo": ValidarArchivo(logger=logger),
-            "url": ValidarURL(logger)
-        }
+        self.validadores = {"texto": ValidarTextoPlano(logger), "archivo": ValidarArchivo(logger=logger),
+                            "url": ValidarURL(logger)}
     
     def validar_texto(self, entrada: str) -> bool:
         """Valida texto plano."""
