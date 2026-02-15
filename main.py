@@ -12,7 +12,7 @@ from extraccion_validacion.tipo_datos import ClasificadorTipoEntrada
 from extraccion_validacion.extraccion_datos import GestorExtractores
 from extraccion_validacion.validacion_datos import GestorValidadores
 
-from Procesado_datos import ProcesadoDatos
+from procesado_datos.Procesado_datos import ProcesadoDatos
 from Convetir_Texto_Audio import ConvertidorTextoVoz
 from Logger import Telemetriaindustrial, logger_modular
 
