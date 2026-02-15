@@ -8,10 +8,10 @@ Utiliza el logger personalizado para registrar eventos importantes durante el pr
 """
 
 # Importacion de librerias necesarias:
-from extraccion_validacion.tipo_datos import tipoentrada
-from extraccion_validacion.extraccion_datos import gestionador_extracciones
-from extraccion_validacion.validacion_datos import ValidadorDatos
-from extraccion_validacion.Extraccion_datos import TipoEntrada, ExtraccionDatos, ValidadorDatos
+from extraccion_validacion.tipo_datos import ClasificadorTipoEntrada
+from extraccion_validacion.extraccion_datos import GestorExtractores
+from extraccion_validacion.validacion_datos import GestorValidadores
+
 from Procesado_datos import ProcesadoDatos
 from Convetir_Texto_Audio import ConvertidorTextoVoz
 from Logger import Telemetriaindustrial, logger_modular
@@ -19,46 +19,44 @@ from Logger import Telemetriaindustrial, logger_modular
 # Configuracion del logger personalizado
 logger = Telemetriaindustrial("Main_Proceso_Texto_Voz").logger
 
+
 #funcion que combina la extraccion y validacion de texto, utilizando el logger para registrar eventos importantes y errores.
 def extraccion_y_validacion(texto):
 
+    clarificador = ClasificadorTipoEntrada(logger=logger)
+    extractor = GestorExtractores(logger=logger)
+    validador = GestorValidadores(logger=logger)
+
     try: #bucle try-except para manejar errores al determinar el tipo de entrada
-        tipo, valor = tipoentrada.determinar_tipo(texto) #determina el tipo de entrada (texto plano, archivo o URL) y su valor asociado
 
-    except Exception as e: #maneja cualquier excepción que ocurra durante la determinación del tipo de entrada y registra el error en el logger
-        logger.error("Error determinando tipo de entrada: %s", e)
-        return None
+        #Determinar tipo de entrada
+        tipo, entrada = clarificador.determinar_tipo(texto) #determina el tipo de entrada (texto plano, archivo o URL) y su valor asociado
 
-    #Diccionario que mapea cada tipo de entrada a su correspondiente función de validación y extracción,
-    #permitiendo un manejo más limpio y organizado de las diferentes formas de entrada. Si el tipo de entrada no es reconocido,
-    #se registra una advertencia en el logger.
-    handlers = {
-        'Textoplano': (ValidadorDatos.texto, ExtraccionDatos.textoplano),
-        'Archivo': (ValidadorDatos.archivo, ExtraccionDatos.archivo),
-        'URL': (ValidadorDatos.url, ExtraccionDatos.url),
-    }
-
-    #Obtiene la función de validación y extracción correspondiente al tipo de entrada. Si el tipo no es procesable, se registra una advertencia.
-    validator_extractor = handlers.get(tipo) 
-    if not validator_extractor:
-        logger.warning("Tipo de entrada no procesable: %s", tipo)
-        return None
-
-    #Ejecuta la función de validación y extracción correspondiente, manejando cualquier excepción que pueda ocurrir durante este proceso
-    #y registrando los eventos en el logger.
-    validator, extractor = validator_extractor
-    try: #bucle try-except para manejar errores durante la validación y extracción de datos, registrando eventos importantes y errores en el logger.
-
-        if validator(valor): #si la validacion es exitosa, se registra la entrada validada en el logger y se procede a extraer los datos utilizando la función correspondiente.
-            logger.info("Entrada validada: %s", tipo)
-            return extractor(valor)
+        if tipo is None:
+            logger.error("No se pudo determinar el tipo de entrada: %s", texto[:50])
+            return None
         
-        #si la validación falla, se registra una advertencia en el logger indicando que la entrada no es válida según el validador.
-        logger.warning("Entrada no válida según el validador: %s", tipo) 
+        logger.info("Tipo de entrada detectado: %s", tipo)
+        
+        # 2. Validar entrada según tipo
+        if not validador.validar_por_tipo(entrada, tipo):
+            logger.warning("Validación fallida para %s: %s", tipo, entrada[:50])
+            return None
+        logger.info("Entrada validada exitosamente")
 
-    except Exception as e: #maneja cualquier excepción que ocurra durante la validación y extracción de datos, registrando el error en el logger.
-        logger.error("Error en validación/extracción: %s", e)
-    return None
+        # 3. Extraer contenido
+        contenido = extractor.extraer(entrada)
+        
+        if contenido:
+            logger.info("Extracción exitosa, contenido obtenido: %d caracteres", len(contenido))
+            return contenido
+        else:
+            logger.error("Extracción falló, no se obtuvo contenido")
+            return None
+        
+    except Exception as e:
+        logger.error("Error en extracción y validación: %s", e, exc_info=True)
+        return None
 
 #Procesado de datos
 def procesado_datos(datos):
