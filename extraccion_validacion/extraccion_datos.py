@@ -184,13 +184,13 @@ class ExtraccionURLNewspaper(EstrategiaExtraccionURL):
         return None
     
 class ExtraccionURLRequests(EstrategiaExtraccionURL):
-    def __init__(self, logger=None, parser='lxml'):
+    def __init__(self, logger=None, parser='lxml', timeout=time_request_limit):
         self.logger = logger
         self.parser = parser
-
+        self.timeout = timeout
     def extraer(self, entrada):
         try:
-            respuesta = requests.get(entrada, timeout=time_request_limit)
+            respuesta = requests.get(entrada, self.timeout) # Realizar una solicitud GET a la URL con un timeout definido
 
             if respuesta.status_code != 200:
                 if self.logger:
@@ -273,7 +273,7 @@ class ExtraccionURL(IExtraccion):
         
         return None
     
-    def puede_procesar(self, entrada: str) -> bool:
+    def puede_extraer(self, entrada: str) -> bool:
         """Verifica si es una URL válida."""
         return validators.url(entrada) is True
     
@@ -324,8 +324,8 @@ class GestorExtractores:
         Returns: Texto extraído o None si falla
         """
         for extractor in self.extractores:
-            # Verificar si este extractor puede procesar la entrada
-            if extractor.puede_procesar(entrada):
+            # Verificar si este extractor puede extraer la entrada
+            if extractor.puede_extraer(entrada):
                 nombre_extractor = extractor.__class__.__name__
                 
                 if self.logger:
@@ -340,7 +340,7 @@ class GestorExtractores:
                     if self.logger:
                         self.logger.warning(f"Extractor {nombre_extractor} compatible pero falló la extracción")
         
-        # Ningún extractor pudo procesar o todos fallaron
+        # Ningún extractor pudo extraer o todos fallaron
         if self.logger:
             self.logger.error(f"No se pudo extraer texto de: {entrada[:100]}... "
                                "(ningún extractor compatible o todos fallaron)")

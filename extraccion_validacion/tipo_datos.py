@@ -3,14 +3,14 @@
 # Librerías estándar de Python
 import os          # Manejo de archivos y directorios
 from abc import ABC, abstractmethod # Clases abstractas para definir interfaces
-from typing import Optional, List, Tuple # Tipos para anotaciones
+from typing import Optional, Tuple, Sequence # Tipos para anotaciones
 # Librerías externas (instaladas con pip)
 import validators  # Validación de URLs
 
-PREFIJOS_DEFAULT = ('http', 'https', 'ftp') # Prefijos de URL predeterminados
+PREFIJOS_URL_DEFAULT = ('http://', 'https://', 'ftp://') # Prefijos de URL predeterminados
 
 #Primera clase: tipo de entrada a la funcion
-def construir_prefijos(esquemas: Optional[List[str]] = None) -> Tuple[str, ...]:
+def construir_prefijos(esquemas: Optional[Sequence[str]] = None) -> Tuple[str, ...]:
     """
     Construye tupla de prefijos de esquema para URLs.
     Args:
@@ -19,11 +19,11 @@ def construir_prefijos(esquemas: Optional[List[str]] = None) -> Tuple[str, ...]:
         Tupla de prefijos construidos    
 """
     if not esquemas:
-        return PREFIJOS_DEFAULT
+        return PREFIJOS_URL_DEFAULT
     
     # Validar que todos sean strings no vacíos
     if not all(isinstance(e, str) and e for e in esquemas):
-        return PREFIJOS_DEFAULT
+        return PREFIJOS_URL_DEFAULT
     
     return tuple(f"{esquema}://" for esquema in esquemas)
     
@@ -54,7 +54,7 @@ class DetectorArchivo(IDetectorTipo):
 class DetectorURL(IDetectorTipo):
     """Detecta si la entrada es una URL válida."""
     
-    def __init__(self, prefijos: Optional[Tuple[str, ...]] = PREFIJOS_DEFAULT):
+    def __init__(self, prefijos: Optional[Tuple[str, ...]] = PREFIJOS_URL_DEFAULT):
         self.prefijos = construir_prefijos(prefijos)
     
     def detectar(self, entrada: str) -> bool:
@@ -84,7 +84,7 @@ class ClasificadorTipoEntrada:
     Usa Chain of Responsibility para determinar el tipo.
     """
     
-    def __init__(self, prefijos: Optional[Tuple[str, ...]] = PREFIJOS_DEFAULT, logger=None):
+    def __init__(self, prefijos: Optional[Tuple[str, ...]] = PREFIJOS_URL_DEFAULT, logger=None):
         """
         Args:
             prefijos: Tupla de prefijos de esquema para URLs

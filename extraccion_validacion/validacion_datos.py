@@ -20,7 +20,6 @@ class ValidarTextoPlano(IValidador):
     def __init__(self, logger=None):
         self.logger = logger
          
-    @staticmethod
     def validar(entrada):
             # Validar que la entrada sea una cadena
             if not isinstance(entrada, str):
@@ -41,7 +40,7 @@ class ValidarArchivo(IValidador):
         self.logger = logger
 
    
-    def validar(self, entrada, mime_esperado=None):
+    def validar(self, entrada):
 
             try: #bloque try-except para capturar errores inesperados
 
@@ -53,7 +52,7 @@ class ValidarArchivo(IValidador):
                 if not tamano_valido:
                     return False # Retornar False si el archivo esta vacio
                 
-                tipo_valido = self._validar_tipo_mime(entrada, mime_esperado) # Validar que el tipo MIME del archivo sea el esperado
+                tipo_valido = self._validar_tipo_mime(entrada, self.mime_esperado) # Validar que el tipo MIME del archivo sea el esperado
                 if not tipo_valido:
                     return False # Retornar False si el tipo MIME no es el esperado
                 
@@ -74,30 +73,30 @@ class ValidarArchivo(IValidador):
                 return False
     
     def _validar_existencia(self, ruta: str) -> bool:
-                if not os.path.isfile(ruta):
-                     if self.logger:
-                        self.logger.warning("Archivo no encontrado: %s", ruta)
-                     return False
-                return True
+        if not os.path.isfile(ruta):
+            if self.logger:
+                self.logger.warning("Archivo no encontrado: %s", ruta)
+            return False
+        return True
     
     def _validar_tamano(self, ruta: str) -> bool:
-                if os.path.getsize(ruta) == 0:
-                    if self.logger:
-                        self.logger.warning("Archivo vacío: %s", ruta)
-                    return False
-                return True
+        if os.path.getsize(ruta) == 0:
+            if self.logger:
+                self.logger.warning("Archivo vacío: %s", ruta)
+            return False
+        return True
     
     def _validar_tipo_mime(self, ruta: str, mime_esperado: Optional[str]) -> bool:
-                tipo_archivo = magic.from_file(ruta, mime=True)
-                if not tipo_archivo:
-                    if self.logger:
-                        self.logger.warning("No se pudo determinar el tipo MIME del archivo: %s", ruta)
-                    return False
-                if mime_esperado and tipo_archivo != mime_esperado:
-                    if self.logger:
-                        self.logger.warning("Tipo MIME no coincide (esperado: %s, encontrado: %s): %s", mime_esperado, tipo_archivo, ruta)
-                    return False
-                return True
+        tipo_archivo = magic.from_file(ruta, mime=True)
+        if not tipo_archivo:
+            if self.logger:
+                self.logger.warning("No se pudo determinar el tipo MIME del archivo: %s", ruta)
+            return False
+        if mime_esperado and tipo_archivo != mime_esperado:
+            if self.logger:
+                self.logger.warning("Tipo MIME no coincide (esperado: %s, encontrado: %s): %s", mime_esperado, tipo_archivo, ruta)
+            return False
+        return True
     
 class ValidarURL(IValidador):      
         # Metodos estaticos para validar URLs
