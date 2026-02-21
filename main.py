@@ -12,7 +12,10 @@ from extraccion_validacion.tipo_datos import ClasificadorTipoEntrada
 from extraccion_validacion.extraccion_datos import GestorExtractores
 from extraccion_validacion.validacion_datos import GestorValidadores
 
-from procesado_datos.Procesado_datos import ProcesadoDatos
+from procesado_datos.procesar_texto import ObtenerTokens, MarcarSilencios
+from procesado_datos.limpeza_texto import LimpiarPalabras
+from procesado_datos.detectar_idioma import GestorDetectorIdioma
+
 from Convetir_Texto_Audio import ConvertidorTextoVoz
 from Logger import Telemetriaindustrial, logger_modular
 
@@ -26,7 +29,7 @@ def extraccion_y_validacion(texto):
     clarificador = ClasificadorTipoEntrada(logger=logger)
     extractor = GestorExtractores(logger=logger)
     validador = GestorValidadores(logger=logger)
-
+    
     try: #bucle try-except para manejar errores al determinar el tipo de entrada
 
         #Determinar tipo de entrada
@@ -59,14 +62,29 @@ def extraccion_y_validacion(texto):
         return None
 
 #Procesado de datos
-def procesado_datos(datos):
-    try: #bucle try-except para manejar errores durante el procesamiento de datos, registrando eventos importantes y errores en el logger.
-        Procesado = ProcesadoDatos.procesar_texto(datos) #procesa los datos utilizando la función de procesamiento de texto
-        logger.info("Datos procesados")
-        return Procesado
-    
-    except Exception as e: #maneja cualquier excepción que ocurra durante el procesamiento de datos, registrando el error en el logger.
-        logger.error("Error procesando datos: %s", e)
+def procesado_datos(contenido):
+    try:
+        # 1. Segmentar en oraciones y tokens
+        tokenizer = ObtenerTokens(logger=logger)
+        segmentos = tokenizer.procesar(contenido)
+
+        # 2. Limpiar tokens
+        limpiador = LimpiarPalabras(logger=logger)
+        segmentos_limpios = limpiador.limpiar(segmentos)
+
+        # 3. Marcar silencios
+        marcador_silencios = MarcarSilencios(logger=logger)
+        segmentos_silencio = marcador_silencios.procesar(segmentos_limpios)
+
+        # 4. Detectar idioma
+        detector = GestorDetectorIdioma(logger=logger)
+        resultado = detector.detectar_segmentos(segmentos_silencio)
+
+        logger.info("Datos procesados exitosamente. Total líneas: %d", len(resultado))
+        return resultado
+
+    except Exception as e:
+        logger.error("Error procesando datos: %s", e, exc_info=True)
         return None
 
 #Conversion de texto a audio
