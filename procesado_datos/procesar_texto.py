@@ -37,18 +37,14 @@ class MarcarSilencios(ProcesadoDatos):
         self.signos_silencio = signos_silencio or {'.', '!', '?', ';', ':'}
 
     def procesar(self, segmentos: list[dict]) -> list[dict]:
-        """
-        Recibe lista de dicts con formato {'linea': ..., 'tokens': [...]}, 
-        y añade marca 'es_silencio' en cada token.
-        """
         resultado = []
         for segmento in segmentos:
+            tokens_limpios = segmento['tokens_limpios']
             tokens_con_silencio = []
-            for token in segmento['tokens']:
+            for token_info in tokens_limpios:
+                token = token_info['token']
                 es_silencio = token in self.signos_silencio
-                if self.logger:
-                    self.logger.debug(
-                        f"Token '{token}' marcado como {'silencio' if es_silencio else 'palabra'}")
-                tokens_con_silencio.append({"token": token, "es_silencio": es_silencio})
-            resultado.append({"linea": segmento["linea"], "tokens": tokens_con_silencio})
+                token_info_con_silencio = {**token_info, 'es_silencio': es_silencio}
+                tokens_con_silencio.append(token_info_con_silencio)
+            resultado.append({'linea': segmento['linea'], 'tokens_limpios': tokens_con_silencio})
         return resultado

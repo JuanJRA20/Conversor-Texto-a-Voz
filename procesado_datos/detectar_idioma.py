@@ -80,12 +80,12 @@ class DetectarIdioma(IDetectarIdiomas):
             if token_lower in español_stopwords:
                 if self.logger:
                     self.logger.debug(f"Token '{token_lower}' es stopword española")
-            return 'español', 1.0
+                return 'español', 1.0
         
-        elif token_lower in ingles_stopwords:
-            if self.logger:
-                self.logger.debug(f"Token '{token_lower}' es stopword inglesa")
-            return 'ingles', 1.0
+            elif token_lower in ingles_stopwords:
+                if self.logger:
+                    self.logger.debug(f"Token '{token_lower}' es stopword inglesa")
+                return 'ingles', 1.0
         
         return self.detectar_idioma_langid(texto)
         

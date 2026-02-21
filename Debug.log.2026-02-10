@@ -1,0 +1,16 @@
+2026-02-10 14:31:56,058 | DEBUG    | Iniciando: main | Args: ()
+2026-02-10 14:31:59,491 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=3
+2026-02-10 14:32:00,194 | DEBUG    | generaraudio_gtts: idioma=ingles -> codigo=en tokens=1
+2026-02-10 14:32:00,843 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=11
+2026-02-10 14:32:01,528 | DEBUG    | generaraudio_gtts: idioma=ingles -> codigo=en tokens=2
+2026-02-10 14:32:02,098 | DEBUG    | generaraudio_gtts: idioma=ingles -> codigo=en tokens=9
+2026-02-10 14:32:02,795 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=7
+2026-02-10 14:32:03,354 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=5
+2026-02-10 14:32:03,823 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=5
+2026-02-10 14:32:04,374 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=7
+2026-02-10 14:32:04,929 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=2
+2026-02-10 14:32:05,391 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=3
+2026-02-10 14:32:05,912 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=3
+2026-02-10 14:32:06,383 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=5
+2026-02-10 14:32:06,946 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=1
+2026-02-10 14:32:07,433 | DEBUG    | generaraudio_gtts: idioma=español -> codigo=es tokens=1
