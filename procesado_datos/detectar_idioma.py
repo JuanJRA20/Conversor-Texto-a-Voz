@@ -3,7 +3,19 @@ from functools import lru_cache
 from typing import Tuple, Optional
 import langid
 from abc import ABC, abstractmethod
+from nltk.corpus import stopwords
+import nltk
 
+try:
+    español_stopwords = frozenset(stopwords.words('spanish'))
+except LookupError:
+    nltk.download('stopwords', quiet=True)
+    español_stopwords = frozenset(stopwords.words('spanish'))
+try:
+    ingles_stopwords = frozenset(stopwords.words('english'))
+except LookupError:
+    nltk.download('stopwords', quiet=True)
+    ingles_stopwords = frozenset(stopwords.words('english'))
 
 # Configuración de langid para limitar a español e inglés, mejorando precisión en textos mixtos.
 langid.set_languages(['es', 'en'])
@@ -60,6 +72,21 @@ class DetectarIdioma(IDetectarIdiomas):
                 self.logger.debug("Idioma detectado por diacríticos: español")
             return 'español', 1.0
         
+        tokens = texto.strip().split()
+
+        if len(tokens) == 1:
+            # Sólo para palabra suelta: usar heurística de stopwords
+            token_lower = tokens[0].lower()
+            if token_lower in español_stopwords:
+                if self.logger:
+                    self.logger.debug(f"Token '{token_lower}' es stopword española")
+            return 'español', 1.0
+        
+        elif token_lower in ingles_stopwords:
+            if self.logger:
+                self.logger.debug(f"Token '{token_lower}' es stopword inglesa")
+            return 'ingles', 1.0
+        
         return self.detectar_idioma_langid(texto)
         
     @staticmethod
@@ -96,6 +123,87 @@ class DetectarIdioma(IDetectarIdiomas):
             return 0.60
         else:
             return 0.50
+        
+    def detectar_segmentos(self, segmentos: list[dict]) -> list[dict]:
+        """
+        Recibe lista de segmentos con tokens limpios, 
+        devuelve cada línea con idioma detectado y tokens enriquecidos con idioma por token.
+        """
+        resultado = []
+        for segmento in segmentos:
+            linea = segmento["linea"]
+            tokens_limpios = segmento["tokens_limpios"]
+            idioma_linea, conf_linea = self.detectar_idioma(linea)
+            tokens_resultado = []
+            for token_info in tokens_limpios:
+                token = token_info["token"]
+                es_palabra = token_info["es_palabra"]
+                es_puntuacion = token_info["es_puntuacion"]
+                protegido = token_info["protegido"]
+
+                idioma_token, conf_token = self.detectar_idioma_token(
+                    token,
+                    es_palabra=es_palabra,
+                    es_puntuacion=es_puntuacion,
+                    protegido=protegido,
+                    idioma_linea=idioma_linea,
+                    conf_linea=conf_linea
+                )
+                if self.logger:
+                    self.logger.debug(
+                        f"Token '{token}' -> idioma: {idioma_token} (conf: {conf_token}), línea: {idioma_linea} (conf: {conf_linea})"
+                    )
+                tokens_resultado.append({**token_info, "idioma_token": idioma_token, "conf_token": conf_token})
+            resultado.append({
+                "linea": linea,
+                "idioma_linea": idioma_linea,
+                "conf_linea": conf_linea,
+                "tokens_idioma": tokens_resultado
+            })
+        return resultado
+
+    def detectar_idioma_token(
+        self,
+        token: str,
+        es_palabra: bool,
+        es_puntuacion: bool,
+        protegido: bool,
+        idioma_linea: Optional[str],
+        conf_linea: float
+    ) -> Tuple[Optional[str], float]:
+        """
+        Detecta idioma de un token, usando heurísticas y hint de línea.
+        """
+        # Check puntuación: no idioma, return None
+        if es_puntuacion:
+            return None, 0.0
+        # Protegidos: confiar en idioma de línea si confianza alta
+        if protegido or not es_palabra or len(token) < 2:
+            if idioma_linea and conf_linea >= 0.7:
+                return idioma_linea, conf_linea
+            else:
+                return self.detectar_idioma_langid(token)
+        # Diacríticos
+        if self._contiene_diacriticos_espanol(token):
+            return "español", 1.0
+        # Stopword (en contexto palabra suelta)
+        if len(token) == 1:
+        # Solo para palabra suelta: usar heurística de stopwords
+            token_lower = token.lower()
+        if token_lower in español_stopwords:
+            if self.logger:
+                self.logger.debug(f"Token '{token_lower}' es stopword española")
+            return 'español', 1.0
+        elif token_lower in ingles_stopwords:
+            if self.logger:
+                self.logger.debug(f"Token '{token_lower}' es stopword inglesa")
+            return 'ingles', 1.0
+        # Por defecto: langid, con fallback a línea si confianza baja
+        idioma, conf = self.detectar_idioma_langid(token)
+        if conf < 0.7 and idioma_linea is not None and conf_linea >= 0.7:
+            return idioma_linea, conf_linea
+        else:
+            return idioma, conf
 
 class GestorDetectorIdioma:
     """
@@ -104,10 +212,11 @@ class GestorDetectorIdioma:
     def __init__(self, logger=None):
         """
         Inicializa el gestor.
-        Args:logger: Logger opcional
+        Args:
+            logger: Logger opcional
         """
         self.logger = logger
-        self.detector = DetectarIdioma(logger=logger)
+        self.detector = DetectarIdioma(logger = logger)
 
     def detectar(self, texto: str) -> Tuple[Optional[str], float]:
         """
@@ -117,6 +226,9 @@ class GestorDetectorIdioma:
         """
 
         return self.detector.detectar_idioma(texto)
+    
+    def detectar_segmentos(self, segmentos: list[dict]) -> list[dict]:
+        return self.detector.detectar_segmentos(segmentos)
     
     def es_espanol(self, texto: str, umbral: float = 0.7) -> bool:
         """
