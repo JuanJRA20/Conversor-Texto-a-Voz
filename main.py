@@ -13,7 +13,7 @@ from extraccion_validacion.extraccion_datos import GestorExtractores
 from extraccion_validacion.validacion_datos import GestorValidadores
 
 from procesado_datos.procesar_texto import ObtenerTokens, MarcarSilencios
-from procesado_datos.limpeza_texto import LimpiarPalabras
+from procesado_datos.limpieza_texto import LimpiarPalabras
 from procesado_datos.detectar_idioma import GestorDetectorIdioma
 
 from Convetir_Texto_Audio import ConvertidorTextoVoz
@@ -95,8 +95,9 @@ def conversion_texto_audio(datos_procesados):
         #de conversión de texto a voz. Si la conversión es exitosa, se registra el nombre del archivo de audio generado en el logger. 
         #Si no se genera ningún audio, se registra una advertencia.
         print("Iniciando conversion de texto a audio...")
-        tokens = [t for linea in datos_procesados for t in linea] 
-        salida = ConvertidorTextoVoz.convertir_texto_voz(tokens)
+        tokens = [token for linea in datos_procesados for token in linea['tokens_idioma']] 
+        tokens_texto = [token['token'] for token in tokens]
+        salida = ConvertidorTextoVoz.convertir_texto_voz(tokens_texto)
         if salida:
             logger.info("Audio generado: %s", salida)
             print(f"Conversion finalizada. Archivo listo: {salida}")

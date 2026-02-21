@@ -174,6 +174,7 @@ class DetectarIdioma(IDetectarIdiomas):
         """
         Detecta idioma de un token, usando heurísticas y hint de línea.
         """
+        token_lower = token.lower()
         # Check puntuación: no idioma, return None
         if es_puntuacion:
             return None, 0.0
@@ -189,15 +190,14 @@ class DetectarIdioma(IDetectarIdiomas):
         # Stopword (en contexto palabra suelta)
         if len(token) == 1:
         # Solo para palabra suelta: usar heurística de stopwords
-            token_lower = token.lower()
-        if token_lower in español_stopwords:
-            if self.logger:
-                self.logger.debug(f"Token '{token_lower}' es stopword española")
-            return 'español', 1.0
-        elif token_lower in ingles_stopwords:
-            if self.logger:
-                self.logger.debug(f"Token '{token_lower}' es stopword inglesa")
-            return 'ingles', 1.0
+            if token_lower in español_stopwords:
+                if self.logger:
+                    self.logger.debug(f"Token '{token_lower}' es stopword española")
+                return 'español', 1.0
+            elif token_lower in ingles_stopwords:
+                if self.logger:
+                    self.logger.debug(f"Token '{token_lower}' es stopword inglesa")
+                return 'ingles', 1.0
         # Por defecto: langid, con fallback a línea si confianza baja
         idioma, conf = self.detectar_idioma_langid(token)
         if conf < 0.7 and idioma_linea is not None and conf_linea >= 0.7:
