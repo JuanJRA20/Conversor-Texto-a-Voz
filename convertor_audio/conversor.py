@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-class ConversorTextoAudio(ABC):
+class IConversor(ABC):
     """
     Interfaz abstracta para conversores de producto fase2 a estructura para generador de audio.
     """
@@ -21,7 +21,7 @@ class ConversorTextoAudio(ABC):
         """
         pass
 
-class ConvertidorTextoVoz(ConversorTextoAudio):
+class ConvertidorTextoVoz(IConversor):
     """
     Implementación para convertir la salida del pipeline lingüístico
     en datos consumibles por el generador de audio, añadiendo el índice de línea para facilitar el debugging.
@@ -35,13 +35,13 @@ class ConvertidorTextoVoz(ConversorTextoAudio):
         """
         self.logger = logger
 
-    def convertir(self, producto_fase2):
+    def convertir(self, texto_segmentos):
         """
         Convierte la lista estructurada de dicts por línea (producto_fase2) en lista de dicts para audio.
         Cada dict incluye el token, idioma, tiempo de silencio y el índice de línea para trazabilidad.
         
         Args:
-            producto_fase2 (list[dict]): Estructura por línea, salida de la fase 2.
+            texto_segmentos (list[dict]): Estructura por línea, salida de la fase 2.
 
         Returns:
             list[dict]: Estructura lista para el generador de audio:
@@ -56,7 +56,7 @@ class ConvertidorTextoVoz(ConversorTextoAudio):
                 ]
         """
         tokens_audio = []
-        for i, segmento in enumerate(producto_fase2):
+        for i, segmento in enumerate(texto_segmentos):
             for token in segmento.get("tokens_idioma", []):
                 palabra = token.get("token")
                 idioma = token.get("idioma_token")
