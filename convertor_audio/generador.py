@@ -1,138 +1,125 @@
-import os
-import uuid
-
-# Librerias de terceros:
+from abc import ABC, abstractmethod
 from gtts import gTTS
 import pyttsx3
 from pydub import AudioSegment
-from tqdm import tqdm
-from abc import ABC, abstractmethod
-#Importacion del logger
-#  personalizado
-from Logger import Telemetriaindustrial
-
-#Configurar el logger
-logger = Telemetriaindustrial("Convertir_Texto_Audio").logger
 
 class IGenerador(ABC):
     @abstractmethod
-    def generar(self):
+    def generar(self, bloques_tokens, nombrador) -> list:
+        """
+        Genera fragmentos de audio a partir de los bloques de tokens.
+        Args:
+            bloques_tokens (list[dict]): Cada dict contiene ya el texto expandido y tiempo de silencio.
+            nombrador: Objeto o función para generar nombres únicos de archivos temporales.
+        Returns:
+            list: Lista de AudioSegment (fragmentos y silencios).
+        """
         pass
 
-
-#Metodo para generar audio usando gTTS
-
-class generaraudio_gtts(IGenerador):
-
-    def __init__(self, logger, palabras, idioma):
-        self.palabras = palabras
-        self.idioma = idioma
+class Generador(IGenerador, ABC):
+    """
+    Clase base abstracta para generación de audio por bloques y silencios.
+    Procesa los tokens, separa fragmentos de voz y pausas, y delega a subclases
+    la creación de cada fragmento concreto.
+    """
+    def __init__(self, logger=None):
         self.logger = logger
 
-    def generar(self, logger=logger):
-        try: #bloque try-except para capturar errores inesperados
+    def generar(self, bloques_tokens, nombrador):
+        archivos = []
+        bloque_palabras = []
+        idioma_actual = None
 
-            # funcion para Expandir tokens con símbolos para mejor pronunciación
-            def expand_token(tok):
-                if '+' in tok:
-                    # convertir C++ -> C plus plus, C# -> C sharp
-                    t = tok.replace('++', ' plus plus').replace('+', ' plus')
-                    return t
-                if '#' in tok:
-                    return tok.replace('#', ' sharp')
-                return tok
+        for token_data in bloques_tokens:
+            token = token_data['token']
+            idioma = token_data['idioma']
+            tiempo_silencio = token_data.get('tiempo_silencio')
+            # Silencio / pausa
+            if idioma is None and tiempo_silencio:
+                if bloque_palabras:
+                    audio, nombre = self._generar_fragmento_audio(bloque_palabras, idioma_actual, nombrador)
+                    if audio:
+                        archivos.append((audio, nombre))
+                    bloque_palabras = []
+                archivos.append((AudioSegment.silent(duration=tiempo_silencio), f"silencio_{tiempo_silencio}ms"))
+            else:
+                if idioma_actual and idioma != idioma_actual and bloque_palabras:
+                    audio, nombre = self._generar_fragmento_audio(bloque_palabras, idioma_actual, nombrador)
+                    if audio:
+                        archivos.append((audio, nombre))
+                    bloque_palabras = []
+                bloque_palabras.append(token)
+                idioma_actual = idioma
 
-            # Expandir tokens con símbolos para mejorar la pronunciación en gTTS
-            texto = " ".join(expand_token(p) for p in palabras) # Unir las palabras en un solo texto
-            codigo_idioma = {"español": "es", "ingles": "en"}.get(idioma, None)  # Mapear el idioma al código de gTTS
-            logger.debug(f"generaraudio_gtts: idioma={idioma} -> codigo={codigo_idioma} tokens={len(palabras)}")
+        # Último bloque
+        if bloque_palabras:
+            audio, nombre = self._generar_fragmento_audio(bloque_palabras, idioma_actual, nombrador)
+            if audio:
+                archivos.append((audio, nombre))
+        return archivos
 
-            #Si el idioma no es soportado por gTTS
-            if codigo_idioma is None:
-                logger.warning(f"Idioma no soportado por gTTS: {idioma}")
-                return None # Retornar None si el idioma no es soportado
-            
-            #En caso de idioma soportado, generar el audio
-            tts = gTTS(text=texto, lang=codigo_idioma) # Crear el objeto gTTS
-            nombre_archivo = ConvertidorTextoVoz.nombre_archivo_temporal(palabras, idioma) # Generar nombre de archivo temporal
-            tts.save(nombre_archivo) # Guardar el archivo de audio
+    @abstractmethod
+    def _generar_fragmento_audio(self, palabras, idioma, nombrador):
+        """
+        Genera un fragmento de audio para un bloque de palabras con el motor concreto.
+        Args:
+            palabras (list[str]): Palabras (ya expandidas) del bloque.
+            idioma (str): Idioma asociado.
+            nombrador: Objeto para generar filename temporal.
+        Returns:
+            tuple: (AudioSegment, str) o (None, None) si falla.
+        """
+        pass
 
-            # cargar en memoria y eliminar el archivo temporal
+class GTTS(Generador):
+    """
+    Generador de fragmentos de audio usando Google Text-to-Speech (gTTS).
+    Convierte bloques de texto y pausas en segmentos de audio,
+    asignando nombres únicos a cada archivo temporal mediante el nombrador.
+    """
+    def __init__(self, logger=None):
+        super().__init__(logger)
+
+    def _generar_fragmento_audio(self, palabras, idioma, nombrador):
+        codigo_idioma = {"español": "es", "ingles": "en"}.get(idioma, None)
+        if not codigo_idioma:
+            if self.logger:
+                self.logger.warning(f"Idioma no soportado por gTTS: {idioma}")
+            return None, None
+        texto = " ".join(palabras)
+        try:
+            tts = gTTS(text=texto, lang=codigo_idioma)
+            nombre_archivo = nombrador.generar_nombre(palabras, idioma)
+            tts.save(nombre_archivo)
             seg = AudioSegment.from_file(nombre_archivo)
+            return seg, nombre_archivo
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Error al generar audio gTTS: {e}")
+            return None, None
 
-            try: # Intentar eliminar el archivo temporal, pero si falla (eg bloqueo por antivirus), no interrumpir el proceso
-                os.remove(nombre_archivo)
-            except Exception:
-                pass
-            return seg
+class Pyttsx3(Generador):
+    """
+    Generador de fragmentos de audio usando pyttsx3.
+    Convierte bloques de texto y pausas en segmentos de audio,
+    asignando nombres únicos a cada archivo temporal mediante el nombrador.
+    """
+    def __init__(self, logger=None):
+        super().__init__(logger)
 
-        except Exception as e: #En caso de error en gTTS retornamos None
-            logger.error(f"Error al generar audio con gTTS para el idioma {idioma}: {str(e)}")
-            return None 
-
-
-class generaraudio_pytts(IGenerador):
-
-    def __init__(self, logger, palabras, idioma):
-        self.palabras = palabras
-        self.idioma = idioma
-        self.logger = logger
-
-    def generar(self, logger=logger):
-
-        texto = " ".join(self.palabras) # Unir las palabras en un solo texto
-        engine = pyttsx3.init() # Inicializar el motor pyttsx3
-        engine.say(texto) # Agregar el texto al motor
-        logger.debug(f"generaraudio_pytts: idioma_hint={self.idioma} tokens={len(self.palabras)}")
-
-        engine.setProperty('rate', velocidad) # Configurar la velocidad de habla
-        engine.setProperty('volume', volumen) # Configurar el volumen de habla
-        nombre_archivo = ConvertidorTextoVoz.nombre_archivo_temporal(self.palabras, self.idioma) # Generar nombre de archivo temporal
-
-        engine.save_to_file(texto, nombre_archivo) # Guardar el archivo de audio
-        engine.runAndWait() # Ejecutar el motor para generar el audio
-        seg = AudioSegment.from_file(nombre_archivo)
+    def _generar_fragmento_audio(self, palabras, idioma, nombrador):
+        texto = " ".join(palabras)
         try:
-            os.remove(nombre_archivo)
-        except Exception:
-            pass
-        return seg
-
-        
-#Metodo para generar audio, usando gTTS y pyttsx3 como respaldo
-
-class GestionadorAudio:
-
-    def __init__(self, palabras, idioma):
-        self.palabras = palabras
-        self.idioma = idioma
-        self.audio_seg = None
-        self.motor = None
-
-    def generar(self, logger=logger):
-        try:
-            audio_seg = ConvertidorTextoVoz.generaraudio_gtts(self.palabras, self.idioma)
-            if audio_seg is not None:
-                self.motor = 'gTTS'
-        except Exception:
-            audio_seg = None
-            self.motor = None
-
-        # Si gTTS falla o devuelve None, intentar con pyttsx3
-        if audio_seg is None:
-            try:
-                logger.warning(f"Intentando generar con motor pyttsx3, gTTS falló para {self.idioma}.")
-                audio_seg = ConvertidorTextoVoz.generaraudio_pytts(self.palabras, self.idioma)
-                if audio_seg is not None:
-                    self.motor = 'pyttsx3'
-            except Exception:
-                audio_seg = None
-                self.motor = None
-
-        # Si ambos motores fallan, retornar None
-        if audio_seg is None:
-            logger.error(f"No se pudo generar el audio para el idioma {self.idioma} con ninguno de los motores.")
-            return None
-
-        # Devolver el segmento y el motor usado para diagnóstico
-        return (audio_seg, self.motor)
+            engine = pyttsx3.init()
+            engine.setProperty('rate', 150)
+            engine.setProperty('volume', 1.0)
+            engine.say(texto)
+            nombre_archivo = nombrador.generar_nombre(palabras, idioma)
+            engine.save_to_file(texto, nombre_archivo)
+            engine.runAndWait()
+            seg = AudioSegment.from_file(nombre_archivo)
+            return seg, nombre_archivo
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Error al generar audio pyttsx3: {e}")
+            return None, None
