@@ -30,7 +30,7 @@ class LimpiarPalabras(LimpiezaTexto):
         return resultado
     
     @staticmethod
-    @lru_cache(maxsize=4096)
+    @lru_cache(maxsize=10000)
     def limpiar_token(token: str) -> dict:
         token_limpio = token.strip().lower()
         patron_palabra = re.compile(r"^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ_\+'\#\-]+$")

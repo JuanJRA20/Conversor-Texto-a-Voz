@@ -46,7 +46,7 @@ class DetectarIdioma(IDetectarIdiomas):
 
     # Método estático para detectar el idioma de un texto, utilizando heurísticas de diacríticos y langid, con manejo de excepciones.
     @staticmethod
-    @lru_cache(maxsize=128)
+    @lru_cache(maxsize=4096)
     def detectar_idioma_langid(texto: str) -> Tuple[Optional[str], float]:
         try: # Bucle try-except para manejar errores en la detección de idioma con langid, registrando cualquier excepción en el logger para diagnóstico.
             codigo_idioma, probabilidad = langid.classify(texto) # Utiliza langid para clasificar el idioma del texto, obteniendo el código de idioma y la puntuación de confianza.
