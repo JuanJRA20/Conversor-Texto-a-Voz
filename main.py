@@ -12,11 +12,11 @@ from extraccion_validacion.tipo_datos import ClasificadorTipoEntrada
 from extraccion_validacion.extraccion_datos import GestorExtractores
 from extraccion_validacion.validacion_datos import GestorValidadores
 
-from procesado_datos.procesar_texto import ObtenerTokens, MarcarSilencios
+from procesado_datos.procesar_texto import ObtenerTokens, MarcarSilencios, AgruparProtegidos
 from procesado_datos.limpieza_texto import LimpiarPalabras
 from procesado_datos.detectar_idioma import GestorDetectorIdioma
 
-from Convetir_Texto_Audio import ConvertidorTextoVoz
+from convertor_audio.Convetir_Texto_Audio import ConvertidorTextoVoz
 from Logger import Telemetriaindustrial, logger_modular
 
 # Configuracion del logger personalizado
@@ -76,9 +76,13 @@ def procesado_datos(contenido):
         marcador_silencios = MarcarSilencios(logger=logger)
         segmentos_silencio = marcador_silencios.procesar(segmentos_limpios)
 
-        # 4. Detectar idioma
+        #4. Agrupar protegidos
+        agrupador_protegidos = AgruparProtegidos(logger=logger)
+        segmentos_agrupados = agrupador_protegidos.procesar(segmentos_silencio)
+
+        # 5. Detectar idioma
         detector = GestorDetectorIdioma(logger=logger)
-        resultado = detector.detectar_segmentos(segmentos_silencio)
+        resultado = detector.detectar(segmentos_agrupados)
 
         logger.info("Datos procesados exitosamente. Total líneas: %d", len(resultado))
         return resultado
@@ -95,8 +99,12 @@ def conversion_texto_audio(datos_procesados):
         #de conversión de texto a voz. Si la conversión es exitosa, se registra el nombre del archivo de audio generado en el logger. 
         #Si no se genera ningún audio, se registra una advertencia.
         print("Iniciando conversion de texto a audio...")
-        tokens = [token for linea in datos_procesados for token in linea['tokens_idioma']] 
-        tokens_texto = [token['token'] for token in tokens]
+        tokens_list = [
+            (token['token'], token.get('idioma_token', None))
+            for linea in datos_procesados
+            for token in linea['tokens_idioma']
+        ]
+        tokens_texto = [token[0] for token in tokens_list]
         salida = ConvertidorTextoVoz.convertir_texto_voz(tokens_texto)
         if salida:
             logger.info("Audio generado: %s", salida)
