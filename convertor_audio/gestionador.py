@@ -30,7 +30,7 @@ class Gestionador:
         self.exportador = Exportador(logger)
         self.limpiador = LimpiadorArchivos(logger)
 
-    def procesar(self, segmentos, nombre_final="audio_resultado", formato="mp3", mostrar_progreso=True):
+    def convertir(self, segmentos, nombre_final="audio_resultado", formato="mp3", mostrar_progreso=True):
         """
         Ejecuta el flujo completo de la fase 3.
         Presenta barra de progreso (tqdm) durante la generación de fragmentos de audio.
