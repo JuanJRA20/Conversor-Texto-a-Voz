@@ -23,7 +23,7 @@ class LimpiarPalabras(LimpiezaTexto):
                 token_info = self.limpiar_token(token)
                 if self.logger:
                     self.logger.debug(
-                        f"Token '{token}' - limpio: '{token_info['token']}', palabra: {token_info['es_palabra']}, protegido: {token_info['protegido']}, puntuación: {token_info['es_puntuacion']}"
+                        f"Token '{token}' - limpio: '{token_info['token']}', palabra: {token_info['es_palabra']}, puntuación: {token_info['es_puntuacion']}"
                     )
                 tokens_limpios.append(token_info)
             resultado.append({'linea': segmento['linea'], 'tokens_limpios': tokens_limpios})
@@ -34,15 +34,12 @@ class LimpiarPalabras(LimpiezaTexto):
     def limpiar_token(token: str) -> dict:
         token_limpio = token.strip().lower()
         patron_palabra = re.compile(r"^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ_\+'\#\-]+$")
-        patron_protegida = re.compile(r"^[\"'‘“(\[].*[\"'’”)\]]$")
         patron_puntuacion = re.compile(r"^[.,:;!?\-]+$")
-        protegido = bool(patron_protegida.match(token))
-        es_palabra = bool(patron_palabra.match(token)) and not protegido and not patron_puntuacion.match(token)
+        es_palabra = bool(patron_palabra.match(token)) and not patron_puntuacion.match(token)
         es_puntuacion = bool(patron_puntuacion.match(token))
         return {
             'token': token_limpio,
             'es_palabra': es_palabra,
-            'protegido': protegido,
             'es_puntuacion': es_puntuacion
         }
     

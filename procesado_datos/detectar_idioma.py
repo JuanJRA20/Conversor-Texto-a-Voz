@@ -132,28 +132,11 @@ class DetectarIdioma(IDetectarIdiomas):
         resultado = []
         for segmento in segmentos:
             linea = segmento["linea"]
-            tokens_limpios = segmento["tokens_limpios"]
             idioma_linea, conf_linea = self.detectar_idioma(linea)
+            tokens_protegidos = segmento.get("tokens_protegidos", [])
             tokens_resultado = []
-            for token_info in tokens_limpios:
-                token = token_info["token"]
-                es_palabra = token_info["es_palabra"]
-                es_puntuacion = token_info["es_puntuacion"]
-                protegido = token_info["protegido"]
-
-                idioma_token, conf_token = self.detectar_idioma_token(
-                    token,
-                    es_palabra=es_palabra,
-                    es_puntuacion=es_puntuacion,
-                    protegido=protegido,
-                    idioma_linea=idioma_linea,
-                    conf_linea=conf_linea
-                )
-                if self.logger:
-                    self.logger.debug(
-                        f"Token '{token}' -> idioma: {idioma_token} (conf: {conf_token}), línea: {idioma_linea} (conf: {conf_linea})"
-                    )
-                tokens_resultado.append({**token_info, "idioma_token": idioma_token, "conf_token": conf_token})
+            for item in tokens_protegidos:
+                tokens_resultado.extend(self._procesar_bloque(item, idioma_linea, conf_linea))
             resultado.append({
                 "linea": linea,
                 "idioma_linea": idioma_linea,
@@ -168,6 +151,8 @@ class DetectarIdioma(IDetectarIdiomas):
         es_palabra: bool,
         es_puntuacion: bool,
         protegido: bool,
+        silencio: Optional[bool],
+        tiempo_silencio: Optional[int],
         idioma_linea: Optional[str],
         conf_linea: float
     ) -> Tuple[Optional[str], float]:
@@ -176,7 +161,7 @@ class DetectarIdioma(IDetectarIdiomas):
         """
         token_lower = token.lower()
         # Check puntuación: no idioma, return None
-        if es_puntuacion:
+        if es_puntuacion or silencio:
             return None, 0.0
         # Protegidos: confiar en idioma de línea si confianza alta
         if protegido or not es_palabra or len(token) < 2:
@@ -204,7 +189,54 @@ class DetectarIdioma(IDetectarIdiomas):
             return idioma_linea, conf_linea
         else:
             return idioma, conf
-
+        
+    def _procesar_bloque(self, bloque, idioma_linea, conf_linea):
+        resultado = []
+        if isinstance(bloque, dict) and 'tokens' in bloque and bloque.get('protegido', False):
+            # Es un bloque protegido
+            texto_bloque = ' '.join(token['token'] for token in bloque['tokens'])
+            # Detecta idioma del bloque completo
+            idioma_bloque, conf_bloque = self.detectar_idioma(texto_bloque)
+            # Si es una sola palabra, lógica de token suelto
+            if len(bloque['tokens']) == 1 and bloque['tokens'][0]['es_palabra']:
+                idioma_token, conf_token = self.detectar_idioma_token(
+                    bloque['tokens'][0]['token'],
+                    es_palabra=bloque['tokens'][0]['es_palabra'],
+                    es_puntuacion=bloque['tokens'][0]['es_puntuacion'],
+                    protegido=True,
+                    es_silencio=bloque['tokens'][0].get('es_silencio', False),
+                    tiempo_silencio=bloque['tokens'][0].get('tiempo_silencio', 0),
+                    idioma_linea=idioma_linea,
+                    conf_linea=conf_linea
+                )
+                bloque['tokens'][0]['idioma_token'] = idioma_token
+                bloque['tokens'][0]['conf_token'] = conf_token
+                resultado.append(bloque['tokens'][0])
+            else:
+                # Es frase: asigna idioma del bloque a cada token interno
+                for token in bloque['tokens']:
+                    idioma_token = idioma_bloque
+                    conf_token = conf_bloque
+                    token['idioma_token'] = idioma_token
+                    token['conf_token'] = conf_token
+                    resultado.append(token)
+        elif isinstance(bloque, dict) and 'token' in bloque:
+            # Token simple
+            idioma_token, conf_token = self.detectar_idioma_token(
+                bloque['token'],
+                es_palabra=bloque['es_palabra'],
+                es_puntuacion=bloque['es_puntuacion'],
+                protegido=False,
+                es_silencio=bloque.get('es_silencio', False),
+                tiempo_silencio=bloque.get('tiempo_silencio', 0),
+                idioma_linea=idioma_linea,
+                conf_linea=conf_linea
+            )
+            bloque['idioma_token'] = idioma_token
+            bloque['conf_token'] = conf_token
+            resultado.append(bloque)
+        return resultado
+    
 class GestorDetectorIdioma:
     """
     Gestor Facade para simplificar la detección de idioma.
@@ -225,10 +257,7 @@ class GestorDetectorIdioma:
         Returns: Tuple[Optional[str], float]: (idioma, confianza)
         """
 
-        return self.detector.detectar_idioma(texto)
-    
-    def detectar_segmentos(self, segmentos: list[dict]) -> list[dict]:
-        return self.detector.detectar_segmentos(segmentos)
+        return self.detector.detectar_segmentos(texto)
     
     def es_espanol(self, texto: str, umbral: float = 0.7) -> bool:
         """
