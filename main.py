@@ -6,7 +6,8 @@ Archivo python donde se crea el codigo que combina las tres etapas del proyecto:
 
 Utiliza el logger personalizado para registrar eventos importantes durante el proceso.
 """
-
+from UI import (mostrar_intro, pedir_texto, mensaje_procesando, mostrar_progreso,
+                resultado_final, mensaje_error, despedida)
 from extraccion_validacion.gestionador import Gestionador as GestionadorExtraccion
 from procesado_datos.gestionador import Gestionador as GestionadorProcesado
 from convertor_audio.gestionador import Gestionador as GestionadorAudio
@@ -22,29 +23,33 @@ gestionador_audio = GestionadorAudio(logger=logger)
 #Funcion principal que combina las tres etapas del proyecto.
 @logger_modular(logger)
 def main():
-    #Solicita al usuario que ingrese un texto, ruta de archivo o URL para convertir a audio.
-    texto = input("Ingrese texto, ruta de archivo o URL a convertir: \n")
+    mostrar_intro()
+    texto = pedir_texto()
 
-    #Llama a la función de extracción y validación de texto, pasando el texto ingresado por el usuario. 
-    #Si la función devuelve None, se indica que la entrada no es procesable
+    print("Extrayendo y validando texto...")
     datos = gestionador_extraccion.extraccion_y_validacion(texto)
     if not datos:
-        print("Entrada no procesable. Revisa los logs para más detalles.")
+        mensaje_error("Entrada no procesable. Revisa los logs para más detalles.")
+        despedida()
         return
-    
-    #Llama a la función de procesamiento de datos, pasando los datos extraídos y validados. 
-    #Si la función devuelve None, se indica que hubo un error en el procesamiento
+
+    mensaje_procesando()
     procesado = gestionador_procesado.procesado_datos(datos)
     if not procesado:
-        print("Error en el procesado. Revisa los logs.")
+        mensaje_error("Error en el procesado. Revisa los logs.")
+        despedida()
         return
-    
-    #Llama a la función de conversión de texto a audio, pasando los datos procesados. 
-    #Si la función devuelve None, se indica que no se generó ningún archivo de audio
-    salida = gestionador_audio.convertir(procesado)
+
+    # Muestra la barra de progreso sobre el iterable real: puedes adaptar esta parte
+    print("Generando audio (esto puede tardar unos segundos)...")
+    salida = gestionador_audio.convertir(procesado, mostrar_progreso=True)
     if not salida:
-        #si no se generó ningún archivo de audio, se muestra un mensaje al usuario indicando que no se generó ningún archivo de audio.
-        print("No se generó ningún archivo de audio.") 
+        mensaje_error("No se generó ningún archivo de audio.")
+        despedida()
+        return
+
+    resultado_final(salida)
+    despedida()
 
 if __name__ == "__main__":
     main()
