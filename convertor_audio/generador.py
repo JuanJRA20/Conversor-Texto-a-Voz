@@ -27,7 +27,6 @@ class Generador(IGenerador, ABC):
         self.logger = logger
 
     def generar(self, bloques_tokens, nombrador):
-        archivos = []
         bloque_palabras = []
         idioma_actual = None
 
@@ -40,14 +39,14 @@ class Generador(IGenerador, ABC):
                 if bloque_palabras:
                     audio, nombre = self._generar_fragmento_audio(bloque_palabras, idioma_actual, nombrador)
                     if audio:
-                        archivos.append((audio, nombre))
+                        yield (audio, nombre)
                     bloque_palabras = []
-                archivos.append((AudioSegment.silent(duration=tiempo_silencio), f"silencio_{tiempo_silencio}ms"))
+                yield (AudioSegment.silent(duration=tiempo_silencio), f"silencio_{tiempo_silencio}ms")
             else:
                 if idioma_actual and idioma != idioma_actual and bloque_palabras:
                     audio, nombre = self._generar_fragmento_audio(bloque_palabras, idioma_actual, nombrador)
                     if audio:
-                        archivos.append((audio, nombre))
+                        yield (audio, nombre)
                     bloque_palabras = []
                 bloque_palabras.append(token)
                 idioma_actual = idioma
@@ -56,8 +55,7 @@ class Generador(IGenerador, ABC):
         if bloque_palabras:
             audio, nombre = self._generar_fragmento_audio(bloque_palabras, idioma_actual, nombrador)
             if audio:
-                archivos.append((audio, nombre))
-        return archivos
+                yield (audio, nombre)
 
     @abstractmethod
     def _generar_fragmento_audio(self, palabras, idioma, nombrador):
