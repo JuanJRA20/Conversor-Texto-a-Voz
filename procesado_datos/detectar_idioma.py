@@ -204,7 +204,7 @@ class DetectarIdioma(IDetectarIdiomas):
                     es_palabra=bloque['tokens'][0]['es_palabra'],
                     es_puntuacion=bloque['tokens'][0]['es_puntuacion'],
                     protegido=True,
-                    es_silencio=bloque['tokens'][0].get('es_silencio', False),
+                    silencio=bloque['tokens'][0].get('es_silencio', False),
                     tiempo_silencio=bloque['tokens'][0].get('tiempo_silencio', 0),
                     idioma_linea=idioma_linea,
                     conf_linea=conf_linea
@@ -227,7 +227,7 @@ class DetectarIdioma(IDetectarIdiomas):
                 es_palabra=bloque['es_palabra'],
                 es_puntuacion=bloque['es_puntuacion'],
                 protegido=False,
-                es_silencio=bloque.get('es_silencio', False),
+                silencio=bloque.get('es_silencio', False),
                 tiempo_silencio=bloque.get('tiempo_silencio', 0),
                 idioma_linea=idioma_linea,
                 conf_linea=conf_linea
