@@ -1,18 +1,19 @@
-from conversor import ConvertidorTextoVoz
-from generador import Generador
-from combinador import CombinadorAudio
-from nombre import NombreTemporal
-from expandir_tokens import ExpansionToken
-from exportador import Exportador
-from limpiador import LimpiadorArchivos
+from .conversor import ConvertidorTextoVoz
+from .generador import GTTS, Pyttsx3
+from .combinador import CombinadorAudio
+from .nombre import NombreTemporal
+from .expandir_tokens import ExpansionToken
+from .exportador import Exportador
+from .limpiador import LimpiadorArchivos
 from tqdm import tqdm
 
 class Gestionador:
     """
     Gestionador de la fase 3 del pipeline de conversión texto a voz.
 
-    Encapsula todo el proceso: conversión, generación de audio, combinación, exportación y limpieza.
-    Muestra una barra de progreso (tqdm) durante la generación de fragmentos de audio.
+    Intenta primero generar audio con gTTS. Si falla, usa pyttsx3 como fallback.
+    Centraliza conversión, generación, combinación, exportación y limpieza.
+    Muestra una barra de progreso con tqdm durante la generación de fragmentos.
     """
     def __init__(self, logger=None):
         """
@@ -23,7 +24,8 @@ class Gestionador:
         """
         self.logger = logger
         self.convertidor = ConvertidorTextoVoz(logger)
-        self.generador = Generador(logger)
+        self.generadorGTTS = GTTS(logger)
+        self.generadorPyttsx3 = Pyttsx3(logger)
         self.combinador = CombinadorAudio(logger)
         self.nombrador = NombreTemporal()
         self.expansion = ExpansionToken(logger)
@@ -33,7 +35,8 @@ class Gestionador:
     def convertir(self, segmentos, nombre_final="audio_resultado", formato="mp3", mostrar_progreso=True):
         """
         Ejecuta el flujo completo de la fase 3.
-        Presenta barra de progreso (tqdm) durante la generación de fragmentos de audio.
+        Muestra barra de progreso (tqdm) durante generación de audio.
+        Primero intenta cada fragmento con gTTS; si falla, usa pyttsx3 como fallback.
 
         Args:
             segmentos (list[dict]): Lista de segmentos lingüísticos enriquecidos.
@@ -45,20 +48,35 @@ class Gestionador:
             str: Ruta del archivo de audio final generado.
 
         Raises:
-            Exception: Si ocurre algún error durante el proceso.
+            Exception: Si ocurre algún error durante el proceso principal.
         """
         try:
+            # Conversión y expansión de tokens
             tokens = self.convertidor.convertir(segmentos)
             tokens_audio = self.expansion.expandir(tokens)
 
-            # Barra de progreso durante la generación de fragmentos
+            # Barra de progreso
             archivos_generados = []
-            gen_entries = tokens_audio
-            iterator = tqdm(gen_entries, desc="Generando fragmentos de audio",
-                             unit="fragmento") if mostrar_progreso else gen_entries
+            iterator = tqdm(tokens_audio, desc="Generando fragmentos de audio",
+                             unit="fragmento") if mostrar_progreso else tokens_audio
             for token_data in iterator:
-                # Aquí llamamos al generador para cada fragmento individualmente
-                resultado = self.generador.generar([token_data], self.nombrador)
+                resultado = None
+                # Intentar con el motor principal (gTTS)
+                try:
+                    resultado = self.generadorGTTS.generar([token_data], self.nombrador)
+                except Exception as e:
+                    if self.logger:
+                        self.logger.error(f"Error generando audio gTTS para token: {token_data}. Error: {e}")
+                # Si falla o no se genera audio, usar fallback (pyttsx3)
+                if not resultado or not resultado[0][0]:
+                    if self.logger:
+                        self.logger.info(f"Usando fallback pyttsx3 para token: {token_data}")
+                    try:
+                        resultado = self.generadorPyttsx3.generar([token_data], self.nombrador)
+                    except Exception as e:
+                        if self.logger:
+                            self.logger.error(f"Error generando audio fallback pyttsx3 para token: {token_data}. Error: {e}")
+                        resultado = [(None, None)]
                 archivos_generados.extend(resultado)
 
             audio_final = self.combinador.combinar(archivos_generados)
