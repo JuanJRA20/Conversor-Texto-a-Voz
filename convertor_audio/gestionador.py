@@ -36,10 +36,10 @@ class Gestionador:
         """
         Ejecuta el flujo completo de la fase 3.
         Muestra barra de progreso (tqdm) durante generación de audio.
-        Primero intenta cada fragmento con gTTS; si falla, usa pyttsx3 como fallback.
+        Primero intenta cada bloque con gTTS; si falla, usa pyttsx3 como fallback.
 
         Args:
-            segmentos (list[dict]): Lista de segmentos lingüísticos enriquecidos.
+            segmentos (list[dict] or list[list[dict]]): Lista de bloques/frases, cada uno con sus tokens enriquecidos.
             nombre_final (str): Nombre base del archivo final exportado (sin extensión).
             formato (str): Formato del archivo exportado ('mp3', 'wav', etc.).
             mostrar_progreso (bool): Si se muestra la barra de progreso durante la generación.
@@ -51,31 +51,33 @@ class Gestionador:
             Exception: Si ocurre algún error durante el proceso principal.
         """
         try:
-            # Conversión y expansión de tokens
-            tokens = self.convertidor.convertir(segmentos)
-            tokens_audio = self.expansion.expandir(tokens)
-
-            # Barra de progreso
             archivos_generados = []
-            iterator = tqdm(tokens_audio, desc="Generando fragmentos de audio",
-                             unit="fragmento") if mostrar_progreso else tokens_audio
-            for token_data in iterator:
+
+            # Si segmentos aún no está expandido, puedes hacerlo aquí y convertir cada uno en bloque
+            lista_de_bloques = []
+            for segmento in segmentos:
+                tokens = self.convertidor.convertir([segmento])
+                tokens_audio = self.expansion.expandir(tokens)
+                if tokens_audio:
+                    lista_de_bloques.append(tokens_audio)
+
+            iterator = tqdm(lista_de_bloques, desc="Generando audio", unit="bloque") if mostrar_progreso else lista_de_bloques
+
+            for bloque in iterator:
                 resultado = None
-                # Intentar con el motor principal (gTTS)
                 try:
-                    resultado = self.generadorGTTS.generar([token_data], self.nombrador)
+                    resultado = self.generadorGTTS.generar(bloque, self.nombrador)
                 except Exception as e:
                     if self.logger:
-                        self.logger.error(f"Error generando audio gTTS para token: {token_data}. Error: {e}")
-                # Si falla o no se genera audio, usar fallback (pyttsx3)
+                        self.logger.error(f"Error generando audio gTTS para bloque. Error: {e}")
                 if not resultado or not resultado[0][0]:
                     if self.logger:
-                        self.logger.info(f"Usando fallback pyttsx3 para token: {token_data}")
+                        self.logger.info("Usando fallback pyttsx3 para este bloque.")
                     try:
-                        resultado = self.generadorPyttsx3.generar([token_data], self.nombrador)
+                        resultado = self.generadorPyttsx3.generar(bloque, self.nombrador)
                     except Exception as e:
                         if self.logger:
-                            self.logger.error(f"Error generando audio fallback pyttsx3 para token: {token_data}. Error: {e}")
+                            self.logger.error(f"Error generando audio fallback pyttsx3 para bloque. Error: {e}")
                         resultado = [(None, None)]
                 archivos_generados.extend(resultado)
 

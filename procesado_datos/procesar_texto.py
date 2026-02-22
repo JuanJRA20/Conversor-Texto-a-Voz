@@ -35,9 +35,8 @@ class MarcarSilencios(ProcesadoDatos):
     def __init__(self, signos_silencio=None, logger=None):
         self.logger = logger
         self.signos_silencio = signos_silencio or \
-        {'.': 500, '!': 500, '?': 500, ';': 500, ':': 500,
-        '...': 500, '(': 500, ')': 500, '[': 500, ']': 500,
-          '{': 500, '}': 500, ',': 500}
+        {'.': 600, '!': 650, '?': 650, ';': 500, ':': 500, '...': 700, ',': 300, '(': 250,       
+            ')': 400, '[': 250, ']': 400, '{': 250, '}': 400, '"': 200, "'": 200, '\n': 500}
 
     def procesar(self, segmentos: list[dict]) -> list[dict]:
         resultado = []

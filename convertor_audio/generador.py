@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from gtts import gTTS
 import pyttsx3
 from pydub import AudioSegment
+import re
 
 class IGenerador(ABC):
     @abstractmethod
@@ -87,6 +88,8 @@ class GTTS(Generador):
                 self.logger.warning(f"Idioma no soportado por gTTS: {idioma}")
             return None, None
         texto = " ".join(palabras)
+        texto = " ".join(palabras)
+        texto = re.sub(r'["\']', '', texto)
         try:
             tts = gTTS(text=texto, lang=codigo_idioma)
             nombre_archivo = nombrador.generar_nombre(palabras, idioma)
@@ -109,6 +112,8 @@ class Pyttsx3(Generador):
 
     def _generar_fragmento_audio(self, palabras, idioma, nombrador):
         texto = " ".join(palabras)
+        texto = " ".join(palabras)
+        texto = re.sub(r'["\']', '', texto)
         try:
             engine = pyttsx3.init()
             engine.setProperty('rate', 150)

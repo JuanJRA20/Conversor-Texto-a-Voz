@@ -155,40 +155,39 @@ class DetectarIdioma(IDetectarIdiomas):
         tiempo_silencio: Optional[int],
         idioma_linea: Optional[str],
         conf_linea: float
-    ) -> Tuple[Optional[str], float]:
-        """
-        Detecta idioma de un token, usando heurísticas y hint de línea.
-        """
+        ) -> Tuple[Optional[str], float]:
+        
         token_lower = token.lower()
-        # Check puntuación: no idioma, return None
         if es_puntuacion or silencio:
             return None, 0.0
+
+        # NUEVO: Si token corto, hereda idioma de línea SIEMPRE
+        if len(token) <= 2 and idioma_linea:
+            return idioma_linea, conf_linea
+
         # Protegidos: confiar en idioma de línea si confianza alta
         if protegido or not es_palabra or len(token) < 2:
             if idioma_linea and conf_linea >= 0.7:
                 return idioma_linea, conf_linea
             else:
                 return self.detectar_idioma_langid(token)
+
         # Diacríticos
         if self._contiene_diacriticos_espanol(token):
             return "español", 1.0
+
         # Stopword (en contexto palabra suelta)
-        if len(token) == 1:
-        # Solo para palabra suelta: usar heurística de stopwords
-            if token_lower in español_stopwords:
-                if self.logger:
-                    self.logger.debug(f"Token '{token_lower}' es stopword española")
-                return 'español', 1.0
-            elif token_lower in ingles_stopwords:
-                if self.logger:
-                    self.logger.debug(f"Token '{token_lower}' es stopword inglesa")
-                return 'ingles', 1.0
-        # Por defecto: langid, con fallback a línea si confianza baja
-        idioma, conf = self.detectar_idioma_langid(token)
-        if conf < 0.7 and idioma_linea is not None and conf_linea >= 0.7:
+        if token_lower in español_stopwords:
+            return 'español', 1.0
+        elif token_lower in ingles_stopwords:
+            return 'ingles', 1.0
+
+        # Por defecto: fallback a idioma de línea si existe (incluso con conf baja)
+        if idioma_linea:
             return idioma_linea, conf_linea
         else:
-            return idioma, conf
+            # Solo si realmente no hay línea, prueba langid
+            return self.detectar_idioma_langid(token)
         
     def _procesar_bloque(self, bloque, idioma_linea, conf_linea):
         resultado = []

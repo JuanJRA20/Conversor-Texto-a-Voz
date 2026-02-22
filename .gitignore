@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.log
 *.log.
+*.log*
 *.pyc
 
 # C extensions
